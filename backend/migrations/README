@@ -1,0 +1,4 @@
+Alembic migrations live here.
+
+Initialize with: alembic init migrations
+Run with:        alembic upgrade head

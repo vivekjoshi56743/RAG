@@ -1,0 +1,34 @@
+# Web framework
+fastapi
+uvicorn[standard]
+pydantic-settings
+
+# Database
+sqlalchemy[asyncio]
+asyncpg
+alembic
+pgvector
+
+# Auth
+firebase-admin
+
+# Embeddings & AI
+voyageai
+cohere
+anthropic
+
+# Retry logic
+tenacity
+
+# PDF parsing
+PyMuPDF
+
+# Word/DOCX parsing
+python-docx
+
+# Google Cloud
+google-cloud-storage
+google-cloud-vision
+
+# Encoding detection (TXT parser fallback)
+chardet
