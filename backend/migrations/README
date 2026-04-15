@@ -1,4 +1,38 @@
+# Backend Migrations
+
 Alembic migrations live here.
 
 Initialize with: alembic init migrations
 Run with:        alembic upgrade head
+
+Cloud SQL app-role grants:
+
+- Script: `infra/sql/grant_app_role.sql`
+- Run the script as a privileged/admin DB role in the target database.
+- Replace `app_role_here` in that script with the DB role used by `DATABASE_URL`.
+
+Example apply command (adjust host/db/user/script path):
+
+- `psql "host=<host> dbname=<db> user=<admin_user> sslmode=require" -f infra/sql/grant_app_role.sql`
+
+Post-apply smoke checks (authenticated):
+
+- `GET /api/folders` returns `200`.
+- `GET /api/conversations` returns `200`.
+- Repeat both requests multiple times; no `users_firebase_uid_key` duplicate errors.
+
+Vertex embedding migration (1024 -> 768):
+
+- Script: `infra/sql/002_vertex_vector_768_migration.sql`
+- This script drops vector indexes, clears old vectors, alters both vector columns to `vector(768)`, and recreates indexes.
+- Apply as a privileged/admin DB role:
+  - `psql "host=<host> dbname=<db> user=<admin_user> sslmode=require" -f infra/sql/002_vertex_vector_768_migration.sql`
+- After apply, reindex documents so fresh 768-d embeddings are written.
+
+Summary enrichment + OCR provenance:
+
+- Script: `infra/sql/004_summary_and_ocr_metadata.sql`
+- Adds `documents.entities` (jsonb), `documents.subtype` (text), and `chunks.source_type` (text).
+- All columns are nullable and default to safe values — no backfill required.
+- After apply, newly indexed documents will carry richer summary metadata and
+  OCR-page chunks will be tagged so the UI / retrieval can treat them specially.

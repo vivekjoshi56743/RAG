@@ -7,7 +7,11 @@ from pgvector.sqlalchemy import Vector
 
 from app.database import Base
 
-EMBEDDING_DIM = 1024
+# Vertex text-embedding-005 embeddings (768 dims).
+# Migrated from Voyage voyage-3 (1024 dims) via
+# infra/sql/002_vertex_vector_768_migration.sql — keep this constant in lock-step
+# with the vector(N) column type in the database.
+EMBEDDING_DIM = 768
 
 
 class Chunk(Base):
@@ -27,7 +31,9 @@ class Chunk(Base):
     part: Mapped[str | None] = mapped_column(String)
     parent_chunk_id: Mapped[str | None] = mapped_column(String)
 
-    # Voyage voyage-3 embeddings (1024 dims)
+    # Extraction provenance: "native" | "ocr" | "ocr_low_conf" | "hybrid"
+    source_type: Mapped[str | None] = mapped_column(String)
+
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
     question_embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
     hypothetical_questions: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)

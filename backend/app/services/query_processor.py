@@ -3,21 +3,11 @@ Stage 1 of the 4-stage retrieval funnel: Query Understanding.
 
 - Resolves pronouns / coreferences in follow-up queries ("it", "that")
 - Decomposes comparison queries ("compare X vs Y") into sub-queries
-- Embeds the (rewritten) query with Voyage voyage-3 (query mode)
+- Embeds the (rewritten) query for retrieval
 """
 import re
-import anthropic
 from app.services.embedder import embed_query
-from app.config import settings
-
-_anthropic: anthropic.AsyncAnthropic | None = None
-
-
-def get_anthropic() -> anthropic.AsyncAnthropic:
-    global _anthropic
-    if _anthropic is None:
-        _anthropic = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _anthropic
+from app.services.llm_provider import complete_text
 
 
 def _has_references(query: str) -> bool:
@@ -26,23 +16,16 @@ def _has_references(query: str) -> bool:
 
 
 async def _rewrite_query(query: str, history: list[dict]) -> str:
-    """Ask Claude to make the query self-contained given recent conversation."""
+    """Rewrite query to be self-contained given recent conversation."""
     context = "\n".join(f"{m['role']}: {m['content']}" for m in history[-4:])
-    client = get_anthropic()
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=200,
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Conversation history:\n{context}\n\n"
-                f"Original query: {query}\n\n"
-                "Rewrite the query to be fully self-contained (resolve all pronouns and references). "
-                "Return ONLY the rewritten query, no explanation."
-            ),
-        }],
+    prompt = (
+        f"Conversation history:\n{context}\n\n"
+        f"Original query: {query}\n\n"
+        "Rewrite the query to be fully self-contained (resolve all pronouns and references). "
+        "Return ONLY the rewritten query, no explanation."
     )
-    return response.content[0].text.strip()
+    text, _provider = await complete_text("rewrite", prompt, max_tokens=200, temperature=0.0)
+    return text.strip()
 
 
 async def _decompose_query(query: str) -> list[str]:
@@ -52,19 +35,12 @@ async def _decompose_query(query: str) -> list[str]:
     if not comparison_pattern:
         return [query]
 
-    client = get_anthropic()
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=200,
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Query: {query}\n\n"
-                "Break this into 2–3 atomic search queries. One per line, no bullets, no numbering."
-            ),
-        }],
+    prompt = (
+        f"Query: {query}\n\n"
+        "Break this into 2–3 atomic search queries. One per line, no bullets, no numbering."
     )
-    lines = [l.strip() for l in response.content[0].text.strip().split("\n") if l.strip()]
+    text, _provider = await complete_text("rewrite", prompt, max_tokens=200, temperature=0.0)
+    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
     return lines[:3] if lines else [query]
 
 
@@ -73,7 +49,7 @@ async def process_query(raw_query: str, conversation_history: list[dict]) -> dic
     Returns:
         rewritten:   self-contained query string
         sub_queries: list of atomic search queries
-        embedding:   Voyage vector for the rewritten query
+        embedding:   retrieval embedding for the rewritten query
     """
     rewritten = raw_query
 

@@ -7,8 +7,7 @@ Production-quality document search and chat system. Handles 10K–200K+ page cor
 ```text
 Frontend (Next.js 14)  →  Backend API (FastAPI)  →  Cloud SQL (PostgreSQL + pgvector)
                                                   →  Cloud Storage (PDFs)
-                                                  →  Voyage AI (embeddings)
-                                                  →  Cohere (re-ranking)
+                                                  →  Cohere (embeddings + re-ranking)
                                                   →  Anthropic Claude (chat + summaries)
 ```
 
@@ -16,7 +15,7 @@ Frontend (Next.js 14)  →  Backend API (FastAPI)  →  Cloud SQL (PostgreSQL + 
 
 ```bash
 cp .env.example .env
-# Set at least COHERE_API_KEY in .env (others optional for now)
+# Set COHERE_API_KEY and ANTHROPIC_API_KEY in .env
 
 make dev               # Starts Postgres + MinIO + backend + frontend
 make verify-pgvector   # Confirms pgvector is working
@@ -41,8 +40,7 @@ Then open <http://localhost:3000>.
 3. Backend uses Postgres (`DATABASE_URL`) for metadata and vectors
 4. Backend uses object storage (`GCS_BUCKET`; MinIO locally, GCS in cloud deployments)
 5. AI providers are called from backend services:
-   - Cohere: reranking
-   - Voyage: embeddings
+   - Cohere: embeddings + reranking
    - Anthropic: summaries/query rewrite/chat
 
 ### Important Current Status
@@ -63,9 +61,9 @@ scripts/     Bulk data loaders, dev utilities
 
 See [`RAG-Pipeline-Deep-Dive.md`](./RAG-Pipeline-Deep-Dive.md) and [`RAG-Engineering-Plan.md`](./RAG-Engineering-Plan.md) for full technical rationale.
 
-- **Embeddings**: Voyage AI voyage-3 (MTEB 0.683, asymmetric query/doc, 32K context)
+- **Embeddings**: Cohere Embed (latest, query/document modes)
 - **Chunking**: Adaptive — structure-aware / recursive / semantic based on document type
-- **Retrieval**: 4-stage funnel — dense + sparse + question → RRF → Cohere rerank → user signals
+- **Retrieval**: 4-stage funnel — dense + sparse + question → RRF → Cohere rerank (latest) → user signals
 - **Database**: PostgreSQL 15 + pgvector (HNSW indexes) + GIN (BM25 full-text)
 - **Auth**: Firebase Auth (Google sign-in, JWT verified server-side)
 - **Deploy**: Cloud Run (backend + frontend), Cloud SQL, Cloud Storage, Cloud Run Jobs (pipeline)

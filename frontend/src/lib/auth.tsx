@@ -1,11 +1,13 @@
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   getAuth,
   onAuthStateChanged,
   signInWithPopup,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
+  type User as FirebaseUser,
 } from "firebase/auth";
 import { initializeApp, getApps } from "firebase/app";
 
@@ -25,6 +27,7 @@ if (!devAuthEnabled && !getApps().length) {
 interface AuthUser {
   uid: string;
   email: string | null;
+  displayName?: string | null;
 }
 
 interface AuthContext {
@@ -45,6 +48,7 @@ const AuthCtx = createContext<AuthContext>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const auth = devAuthEnabled ? null : getAuth();
 
@@ -56,7 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     if (!auth) return;
     return onAuthStateChanged(auth, (u) => {
-      setUser(u ? { uid: u.uid, email: u.email } : null);
+      setFirebaseUser(u);
+      setUser(u ? { uid: u.uid, email: u.email, displayName: u.displayName } : null);
       setLoading(false);
     });
   }, [auth]);
@@ -74,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     if (devAuthEnabled) {
       setUser(null);
+      setFirebaseUser(null);
       return;
     }
     if (!auth) return;
@@ -81,14 +87,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getIdToken = async () => {
-    return user ? devAuthToken : null;
+    if (devAuthEnabled) {
+      return user ? devAuthToken : null;
+    }
+    if (!firebaseUser) {
+      return null;
+    }
+    return firebaseUser.getIdToken();
   };
 
+  const value = useMemo(
+    () => ({ user, loading, signInWithGoogle, signOut, getIdToken }),
+    [user, loading],
+  );
+
   return (
-    <AuthCtx.Provider value={{ user, loading, signInWithGoogle, signOut, getIdToken }}>
-      {children}
-    </AuthCtx.Provider>
+    <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthCtx);
+
+export function useRequireAuth() {
+  const auth = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!auth.loading && !auth.user) {
+      router.replace("/login");
+    }
+  }, [auth.loading, auth.user, router]);
+
+  return auth;
+}

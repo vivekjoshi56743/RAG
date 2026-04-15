@@ -15,13 +15,23 @@ from app.services.query_processor import process_query
 from app.services.retriever import retrieve
 from app.services.reranker import rerank
 from app.services.user_reranker import apply_user_signals
-import anthropic
-from app.config import settings
+from app.services.llm_provider import stream_chat
 
 SYSTEM_PROMPT = """You are a helpful research assistant with access to a knowledge base.
-Answer the user's question using ONLY the provided sources.
-Cite sources inline as [Source N] whenever you use information from them.
-If the answer is not in the sources, say so clearly."""
+
+Answer the user's question using ONLY the provided sources. Do not use outside knowledge.
+
+Length and depth:
+- Write comprehensive, well-structured answers. Prefer multiple paragraphs over one-liners.
+- Synthesize information *across* sources rather than quoting a single one; compare, contrast, and connect related details when the sources support it.
+- When the question is broad or open-ended, organize the response with short markdown headings or bullet lists so the reader can scan it.
+- Include concrete details the sources provide: names, dates, numbers, places, direct phrasing where it matters.
+- Do not pad with filler or restate the question. Length should come from substance, not from repetition.
+
+Citations:
+- Cite sources inline as [Source N] immediately after each claim that uses them.
+- A single sentence may cite multiple sources, e.g. "[Source 2][Source 5]".
+- If the answer is genuinely not in the sources, say so clearly and stop — do not guess."""
 
 
 async def run_rag_pipeline(
@@ -42,6 +52,7 @@ async def run_rag_pipeline(
     # Stage 2
     candidates = await retrieve(
         user_id=user_id,
+        query_text=query_data["rewritten"],
         query_embedding=query_data["embedding"],
         db=db,
         document_ids=document_ids,
@@ -50,7 +61,7 @@ async def run_rag_pipeline(
 
     # Stage 3 — use LLM reranker for comparison queries (multiple sub-queries)
     use_llm = len(query_data["sub_queries"]) > 1
-    reranked = await rerank(query_data["rewritten"], candidates, top_n=15, use_llm=use_llm)
+    reranked = await rerank(query_data["rewritten"], candidates, top_n=25, use_llm=use_llm)
 
     # Stage 4
     final_chunks = await apply_user_signals(
@@ -58,7 +69,7 @@ async def run_rag_pipeline(
         query_embedding=query_data["embedding"],
         chunks=reranked,
         db=db,
-        top_n=8,
+        top_n=12,
     )
 
     # Context assembly
@@ -67,11 +78,32 @@ async def run_rag_pipeline(
     return final_chunks, prompt
 
 
+def _format_source_header(index: int, chunk: dict) -> str:
+    """Build a human-readable provenance header for a retrieved chunk."""
+    parts = [f"Source {index}"]
+    doc_name = chunk.get("doc_name")
+    if doc_name:
+        parts.append(f'"{doc_name}"')
+    section = chunk.get("section_heading") or chunk.get("section")
+    if section:
+        parts.append(str(section))
+    page = chunk.get("page_number")
+    if page is not None:
+        parts.append(f"p. {page}")
+    source_type = chunk.get("source_type")
+    if source_type and source_type not in ("native", None):
+        parts.append(f"[{source_type}]")
+    return "[" + " — ".join(parts) + "]"
+
+
 def _build_prompt(query: str, chunks: list[dict], history: list[dict]) -> list[dict]:
-    """Build the messages array for the Anthropic API."""
-    sources = "\n\n".join(
-        f"[Source {i+1}] {c['content']}" for i, c in enumerate(chunks)
-    )
+    """Build the messages array for the chat LLM."""
+    source_blocks = []
+    for i, c in enumerate(chunks):
+        header = _format_source_header(i + 1, c)
+        source_blocks.append(f"{header}\n{c['content']}")
+    sources = "\n\n".join(source_blocks)
+
     messages = []
 
     for m in history[-10:]:
@@ -86,13 +118,11 @@ def _build_prompt(query: str, chunks: list[dict], history: list[dict]) -> list[d
 
 
 async def stream_response(prompt_messages: list[dict]):
-    """Yield SSE text chunks from Claude Sonnet (streaming)."""
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2048,
+    """Yield SSE text chunks from provider-routed chat model (with fallback)."""
+    async for text in stream_chat(
+        prompt_messages,
         system=SYSTEM_PROMPT,
-        messages=prompt_messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+        max_tokens=4096,
+        temperature=0.0,
+    ):
+        yield text

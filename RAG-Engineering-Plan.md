@@ -54,12 +54,12 @@
 - Why not Pinecone/Qdrant: Extra vendor, extra cost, extra auth. pgvector keeps everything in one database — documents metadata, chunks, vectors, conversations, users — all queryable with standard SQL + vector ops.
 - Scale consideration: pgvector with HNSW index handles 1M+ vectors comfortably. For 10K pages ≈ ~50K chunks ≈ ~50K vectors — well within limits.
 
-### Embeddings: **Voyage AI voyage-3** *(corpus-agnostic — see RAG Pipeline Deep Dive v2)*
-- Why: Highest MTEB retrieval score (0.683) among all API models. Domain-agnostic — handles technical docs, textbooks, contracts, narrative equally well. Asymmetric query/document embedding (3–8% retrieval boost). 1024 dims, 32K context window.
-- Why NOT voyage-law-2: Domain-specific models fail on unfamiliar text. Our users upload anything.
-- Why NOT Vertex AI: 768 dims clusters at 50K+ chunks, MTEB retrieval ~0.63 vs 0.683 for Voyage.
-- Cost: ~$0.06/1M tokens. Index 200K pages: ~$3. Per query: negligible.
-- Fallback: Cohere embed-v3 (same dims, same asymmetric API, Matryoshka support).
+### Embeddings: **Cohere Embed (latest)** *(single-provider strategy)*
+- Why: Keeps embeddings and reranking on one provider, reducing auth/config complexity and operational risk.
+- Why this model family: High-quality general-purpose retrieval embeddings with asymmetric query/document modes and production-grade API reliability.
+- Vector shape: 1024-dim embeddings align well with pgvector + HNSW for this scale.
+- Cost: Competitive for both indexing and query-time embeddings at expected volume.
+- Policy: No secondary embedding provider by default.
 
 ### Chunking: **Adaptive multi-strategy** *(auto-detects document structure)*
 - Detection pass scans first 5 pages → classifies as STRUCTURED / MIXED / FLAT.
@@ -68,8 +68,8 @@
 - Flat docs (novels, essays): semantic chunking (split where sentence similarity drops).
 - Default chunk size: 512 tokens. Every chunk enriched with 2 hypothetical questions for retrieval.
 
-### Re-Ranking: **Cohere Rerank 3.5** + **Claude LLM reranker for complex queries**
-- Why Cohere: Best quality-to-latency ratio (300ms for 100 docs, NDCG@10 of 0.67). $0.002/search.
+### Re-Ranking: **Cohere Rerank (latest)** + **Claude LLM reranker for complex queries**
+- Why Cohere: Fast, high-quality reranking and consistent with the single-provider retrieval stack.
 - Why LLM fallback: For comparison/multi-hop queries, Claude scores relevance more accurately (~0.70 NDCG@10) at the cost of ~2s latency.
 
 ### User Re-Ranking: **Custom feedback-weighted scoring**
@@ -77,7 +77,7 @@
 - Materialized views aggregate preference scores per user × chunk and user × document.
 - Applied as Stage 4 of a 4-stage retrieval funnel. Cold-start safe (skips for users with <10 signals).
 
-> **Full pipeline details:** See companion document **"RAG Pipeline Deep Dive v2"** for embedding model comparison, adaptive chunking implementation, 4-stage retrieval funnel, re-ranker code, user-signal collection, and evaluation framework.
+> **Full pipeline details:** See companion document **"RAG Pipeline Deep Dive v2"** for adaptive chunking implementation, retrieval/reranking flow, user-signal collection, and evaluation framework. Provider policy for this plan is Cohere (embeddings + rerank) and Anthropic (LLM).
 
 ### Frontend: **Next.js 14 (App Router)**
 - Why: SSR for fast loads, API routes if needed, React ecosystem, easy deployment to Cloud Run.
@@ -127,7 +127,7 @@ CREATE TABLE documents (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Chunks (with pgvector) — updated for Voyage voyage-law-2 (1024 dims) + structural metadata
+-- Chunks (with pgvector) — updated for Cohere Embed (1024 dims) + structural metadata
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE chunks (
@@ -143,7 +143,7 @@ CREATE TABLE chunks (
     section_heading TEXT,              -- e.g., "Requirements on content and format..."
     part TEXT,                         -- e.g., "Part 201 — Labeling"
     parent_chunk_id TEXT,              -- link to parent for context retrieval
-    -- Embeddings (Voyage voyage-law-2, 1024 dimensions)
+    -- Embeddings (Cohere Embed, 1024 dimensions)
     embedding vector(1024),            -- Document embedding (contextual prefix)
     question_embedding vector(1024),   -- Embedding of hypothetical questions
     hypothetical_questions TEXT[] DEFAULT '{}',
@@ -234,7 +234,7 @@ CREATE INDEX messages_conv_idx ON messages(conversation_id, created_at);
 
 ## 4. Corpus Strategy: Agnostic by Design
 
-The system is corpus-agnostic — users upload whatever they need. The adaptive chunker, general-purpose embeddings (Voyage voyage-3), and hybrid retrieval all work across document types without configuration.
+The system is corpus-agnostic — users upload whatever they need. The adaptive chunker, general-purpose embeddings (Cohere Embed), and hybrid retrieval all work across document types without configuration.
 
 ### Demo Corpus Recommendations (for showcasing at scale)
 
@@ -257,7 +257,7 @@ To demonstrate the system handles 10K+ pages, pre-load one of these:
 ### Phase 0: Environment Setup (Day 1)
 ```
 Tasks:
-├── Create GCP project, enable APIs (Cloud SQL, Cloud Run, Cloud Storage, Cloud Vision, Vertex AI)
+├── Create GCP project, enable APIs (Cloud SQL, Cloud Run, Cloud Storage, Cloud Vision)
 ├── Set up Cloud SQL PostgreSQL 15 instance with pgvector extension
 ├── Create GCS bucket for document storage
 ├── Set up Firebase Auth project
@@ -301,7 +301,7 @@ Tasks:
 │   │   └── For CFR: use section headers as natural split points
 │   │
 │   ├── Step 3: Embedding Generation
-│   │   ├── Batch embed via Vertex AI (up to 250 texts per batch call)
+│   │   ├── Batch embed via Cohere Embed API (batched async calls)
 │   │   ├── Rate limiting + retry logic
 │   │   └── Store embedding vectors in chunks table
 │   │
@@ -323,7 +323,7 @@ Tasks:
 **Key decisions for scale (10K+ pages):**
 - Process documents asynchronously. Upload returns immediately; pipeline runs in background.
 - Use Cloud Run Jobs for batch processing (auto-scales, no timeout issues).
-- Embed in batches of 250 (Vertex AI limit). For 50K chunks, that's ~200 API calls — takes ~10 minutes.
+- Embed in async batches via Cohere. For 50K chunks, process in worker batches with retries and backoff.
 - Chunk size of 512 tokens is the sweet spot: small enough for precise retrieval, large enough for context.
 
 **Exit criteria:** Upload a 100-page PDF, see it go from "uploaded" → "processing" → "indexed", verify chunks + embeddings exist in DB.
@@ -356,7 +356,7 @@ Tasks:
 │       └── {chunk_id, content, doc_name, page, score, snippet_highlight}
 │
 ├── Query Embedding
-│   └── Embed the user's query with same Vertex AI model (single call, <200ms)
+│   └── Embed the user's query with the same Cohere model (single call, low latency)
 │
 └── Search Filters
     ├── Filter by document_id(s)
@@ -506,7 +506,7 @@ Internet → Cloud Load Balancer (HTTPS)
                 ├── /api/* → Backend Cloud Run (FastAPI)
                 │               └── Cloud SQL (pgvector)
                 │               └── Cloud Storage (PDFs)
-                │               └── Vertex AI (embeddings)
+                │               └── Cohere API (embeddings + rerank)
                 │               └── Anthropic API (chat)
                 └── /*     → Frontend Cloud Run (Next.js)
 
@@ -549,7 +549,7 @@ Tasks:
 | Cloud Run (backend)      | ~$5–15        | Pay per request, min 1 instance             |
 | Cloud Run (frontend)     | ~$5–10        | Static-ish, low compute                     |
 | Cloud Storage            | ~$1           | PDF storage, pennies per GB                 |
-| Voyage AI Embeddings     | ~$3–8         | Initial indexing ~$3; queries negligible ($0.06/1M tokens) |
+| Cohere Embed             | ~$3–8         | Initial indexing + query embeddings (single provider) |
 | Cohere Rerank            | ~$5–15        | $0.002/search × ~500 queries/day            |
 | Anthropic API (chat)     | ~$15–40       | Claude Sonnet for RAG answers + query rewriting |
 | Anthropic API (summaries)| ~$2–5         | One-time per document upload                |
@@ -593,10 +593,10 @@ rag-search-engine/
 │   │   │   │   ├── txt_parser.py
 │   │   │   │   └── markdown_parser.py
 │   │   │   ├── chunker.py       # Structure-aware chunking (512 tokens, hierarchy-preserving)
-│   │   │   ├── embedder.py      # Voyage AI voyage-law-2 (async, batched, contextual prefixing)
+│   │   │   ├── embedder.py      # Cohere Embed (latest, async, batched, contextual prefixing)
 │   │   │   ├── query_processor.py  # Query rewriting, decomposition, embedding
 │   │   │   ├── retriever.py     # Stage 2: 3-signal hybrid retrieval + RRF
-│   │   │   ├── reranker.py      # Stage 3: Cohere Rerank 3.5 + LLM fallback
+│   │   │   ├── reranker.py      # Stage 3: Cohere Rerank (latest) + LLM fallback
 │   │   │   ├── user_reranker.py # Stage 4: User-signal preference scoring
 │   │   │   ├── rag.py           # Full 4-stage RAG pipeline orchestration
 │   │   │   ├── summarizer.py    # Auto-generated doc summaries via Claude
@@ -659,7 +659,7 @@ rag-search-engine/
 |-----|-------|-------------|
 | 1 | Setup | GCP project, DB, GCS, Firebase, repo scaffold, local dev running |
 | 2 | Ingestion | PDF upload endpoint, GCS storage, PyMuPDF text extraction |
-| 3 | Ingestion | Chunking logic, Vertex AI embedding, pgvector storage |
+| 3 | Ingestion | Chunking logic, Cohere embedding, pgvector storage |
 | 4 | Ingestion | Async pipeline (Cloud Run Job), status tracking, bulk CFR loader |
 | 5 | Search | Hybrid search endpoint (dense + sparse + RRF) |
 | 6 | Search | Search API polish, filters, snippet highlighting |
@@ -1372,7 +1372,7 @@ async def revoke_permission(doc_id: UUID, perm_id: UUID, user: User = Depends(ge
 
 1. **Create the GCP project** and enable Cloud SQL, Cloud Run, Cloud Storage, Cloud Vision APIs.
 2. **Provision Cloud SQL** — PostgreSQL 15, enable pgvector extension.
-3. **Get API keys** — Voyage AI (embeddings), Cohere (re-ranking), Anthropic (chat + summaries).
+3. **Get API keys** — Cohere (embeddings + re-ranking) and Anthropic (chat + summaries).
 4. **Set up the repo** with the monorepo structure from Section 7.
 5. **Start with Phase 1** — the adaptive ingestion pipeline (parser registry + structure-aware chunking + embedding) is the foundation everything else depends on.
 6. **Prepare demo corpus** — download Python + React + Node.js docs (~8K pages) to test the pipeline at scale.

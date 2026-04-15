@@ -1,74 +1,94 @@
 """
 Stage 3 of the 4-stage retrieval funnel: Cross-Encoder Re-Ranking.
 
-Default: Cohere Rerank 3.5 (~300ms, NDCG@10 = 0.67, $0.002/search)
-Fallback: Claude LLM reranker (~2s, NDCG@10 ~0.70) for comparison/multi-hop queries
+Primary: Vertex AI Ranking API
+Fallback: Provider-routed LLM reranker (Anthropic/Vertex via llm_provider)
 """
-import cohere
-import anthropic
+import json
+
+import google.auth
+from google.auth.transport.requests import Request as GoogleAuthRequest
+import requests
+
 from app.config import settings
-
-_cohere: cohere.AsyncClient | None = None
-_anthropic: anthropic.AsyncAnthropic | None = None
+from app.services.llm_provider import complete_text
 
 
-def get_cohere() -> cohere.AsyncClient:
-    global _cohere
-    if _cohere is None:
-        _cohere = cohere.AsyncClient(api_key=settings.cohere_api_key)
-    return _cohere
+def _get_access_token() -> str:
+    credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    credentials.refresh(GoogleAuthRequest())
+    return credentials.token
 
 
-def get_anthropic() -> anthropic.AsyncAnthropic:
-    global _anthropic
-    if _anthropic is None:
-        _anthropic = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return _anthropic
+def _vertex_rank(query: str, chunks: list[dict], top_n: int) -> list[dict]:
+    if not settings.vertex_ranking_config:
+        raise ValueError("VERTEX_RANKING_CONFIG is not configured")
+
+    token = _get_access_token()
+    url = f"https://discoveryengine.googleapis.com/v1alpha/{settings.vertex_ranking_config}:rank"
+    payload = {
+        "model": settings.vertex_ranking_model,
+        "query": query,
+        "records": [{"id": str(i), "content": c["content"][:4000]} for i, c in enumerate(chunks)],
+        "topN": top_n,
+    }
+    response = requests.post(
+        url,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
+    )
+    response.raise_for_status()
+    data = response.json()
+    ranked_records = data.get("records", [])
+    if not ranked_records:
+        return chunks[:top_n]
+
+    ordered: list[dict] = []
+    used_ids: set[int] = set()
+    for record in ranked_records:
+        try:
+            idx = int(record.get("id", "-1"))
+        except ValueError:
+            continue
+        if idx < 0 or idx >= len(chunks) or idx in used_ids:
+            continue
+        score = float(record.get("score", 0.0))
+        ordered.append({**chunks[idx], "rerank_score": score})
+        used_ids.add(idx)
+
+    ordered.extend(chunks[i] for i in range(len(chunks)) if i not in used_ids)
+    return ordered[:top_n]
 
 
 async def rerank(query: str, chunks: list[dict], top_n: int = 15, use_llm: bool = False) -> list[dict]:
-    """Re-rank chunks against query. use_llm=True for complex/comparison queries."""
+    """Re-rank chunks using Vertex Ranking API, with LLM fallback."""
     if not chunks:
         return []
     if use_llm:
         return await _llm_rerank(query, chunks, top_n)
-    return await _cohere_rerank(query, chunks, top_n)
-
-
-async def _cohere_rerank(query: str, chunks: list[dict], top_n: int) -> list[dict]:
-    client = get_cohere()
-    response = await client.rerank(
-        model="rerank-v3.5",
-        query=query,
-        documents=[c["content"] for c in chunks],
-        top_n=top_n,
-        return_documents=False,
-    )
-    return [
-        {**chunks[r.index], "rerank_score": r.relevance_score}
-        for r in response.results
-    ]
+    try:
+        return _vertex_rank(query, chunks, top_n)
+    except Exception:
+        return await _llm_rerank(query, chunks, top_n)
 
 
 async def _llm_rerank(query: str, chunks: list[dict], top_n: int) -> list[dict]:
-    """Ask Claude to score each (query, chunk) pair. Slower but highest quality."""
-    client = get_anthropic()
-    scored = []
-    for chunk in chunks[:top_n * 2]:
-        response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=10,
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Query: {query}\n\nPassage: {chunk['content'][:1000]}\n\n"
-                    "Rate relevance 0.0–1.0. Respond with the number only."
-                ),
-            }],
-        )
-        try:
-            score = float(response.content[0].text.strip())
-        except ValueError:
-            score = 0.0
-        scored.append({**chunk, "rerank_score": score})
-    return sorted(scored, key=lambda c: c["rerank_score"], reverse=True)[:top_n]
+    """LLM-based fallback reranker via provider layer."""
+    numbered = "\n\n".join(f"[{i}] {c['content'][:400]}" for i, c in enumerate(chunks[: max(top_n * 2, 20)]))
+    prompt = (
+        "You are a relevance ranking assistant.\n\n"
+        f"Query: {query}\n\n"
+        f"Passages:\n{numbered}\n\n"
+        "Return a JSON array of passage indices ordered from most to least relevant. "
+        "Return ONLY JSON. Example: [3,0,7,1]"
+    )
+    text, _provider = await complete_text("rerank", prompt, max_tokens=256, temperature=0.0)
+    try:
+        indices = json.loads(text.strip())
+        reranked = [chunks[i] for i in indices if isinstance(i, int) and 0 <= i < len(chunks)]
+        ranked_set = set(i for i in indices if isinstance(i, int))
+        reranked.extend([c for i, c in enumerate(chunks) if i not in ranked_set])
+        return reranked[:top_n]
+    except Exception:
+        return chunks[:top_n]

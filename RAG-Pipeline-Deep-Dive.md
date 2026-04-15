@@ -30,9 +30,7 @@ Since we don't control the corpus domain, the embedding model must be:
 
 | Model | Dims | Max Context | MTEB Retrieval | Asymmetric | Matryoshka | Cost/1M tok | Reliability |
 |-------|------|-------------|---------------|------------|------------|-------------|-------------|
-| **Voyage AI voyage-3** | 1024 | 32K | **0.683** | Yes (`input_type`) | No | $0.06 | Good (smaller co.) |
-| Voyage AI voyage-law-2 | 1024 | 16K | ~0.67 legal only | Yes | No | $0.12 | Good |
-| **Cohere embed-v3.0** | 1024 | 512 | **0.675** | Yes (`input_type`) | Yes (down to 256) | $0.10 | **Excellent** |
+| **Cohere Embed (latest)** | 1024 | Provider-managed | High | Yes (query/doc mode) | Yes (model-dependent) | Competitive | **Excellent** |
 | **OpenAI text-embedding-3-large** | 3072 | 8K | 0.644 | No | **Yes** (to 256) | $0.13 | **Excellent** |
 | OpenAI text-embedding-3-small | 1536 | 8K | 0.622 | No | Yes (to 512) | $0.02 | Excellent |
 | Vertex AI text-embedding-004 | 768 | 2048 | ~0.63 | Partial | No | $0.025 | Excellent (GCP) |
@@ -41,37 +39,22 @@ Since we don't control the corpus domain, the embedding model must be:
 | Mixedbread mxbai-embed-large | 1024 | 512 | 0.651 | No | Yes | Free (GPU) | Self-managed |
 | E5-mistral-7b-instruct | 4096 | 32K | 0.668 | Yes | No | Free (GPU) | Self-managed |
 
-### 1.3 Decision: **Voyage AI voyage-3** (primary) with **Cohere embed-v3** as fallback
+### 1.3 Decision: **Cohere Embed (latest)** as the single embedding provider
 
-**Why voyage-law-2 is OUT:**
-A domain-specific model is wrong when users upload anything. voyage-law-2 was fine-tuned on legal corpora. It'll underperform on Python documentation, physics textbooks, or fiction. We need the generalist.
+**Why we use one provider for retrieval models:**
+1. **Operational simplicity.** One API key, one SDK, one billing surface for both embeddings and reranking.
+2. **Consistent behavior.** Retrieval stages are easier to tune when dense embeddings and reranker come from the same vendor family.
+3. **Reliability + support.** Cohere provides stable production APIs for both model types.
+4. **Good dimensional balance.** 1024-dim vectors work well with pgvector HNSW at our target scale.
+5. **Cost remains manageable.** Indexing and query-time embedding stay within the expected budget envelope.
 
-**Why voyage-3 wins for a corpus-agnostic system:**
-
-1. **Highest MTEB retrieval score (0.683).** On the actual task we care about — finding the right passage given a question — it's the best available API model. This isn't marginal; 0.683 vs 0.644 (OpenAI) means retrieving the correct chunk ~6% more often. Over thousands of queries, that's a meaningful UX difference.
-
-2. **Asymmetric embedding.** Voyage supports `input_type="document"` vs `input_type="query"`. Documents and queries have fundamentally different distributions. A query is short, interrogative, and incomplete. A document chunk is long, declarative, and self-contained. Models that encode both identically leave quality on the table. In benchmarks, asymmetric embedding improves retrieval by 3–8%.
-
-3. **32K context window.** Our chunks are ~512 tokens, but with metadata prefix they're ~600–700. 32K gives massive headroom. More importantly, it means we can experiment with larger chunks (1024, 2048 tokens) or even full-section embeddings without switching models.
-
-4. **1024 dimensions.** The right balance:
-   - 768 (Vertex): Too compressed at 1M+ chunks. Cosine similarity scores cluster, reducing discrimination.
-   - 3072 (OpenAI): Overkill. 3x storage, 3x slower HNSW search, minimal quality gain.
-   - 1024: Good separation, reasonable storage (~4KB per vector, ~4GB for 1M chunks).
-
-5. **Cost.** $0.06/1M tokens. Indexing 200K pages (~50M tokens): $3. Per query (single embedding): $0.000003. Negligible.
-
-6. **Domain-agnostic strength.** voyage-3 is trained on diverse data — technical, legal, scientific, narrative. Unlike voyage-law-2, it doesn't trade off general ability for domain specialization.
-
-**Why Cohere is the fallback (not OpenAI):**
-- Cohere has Matryoshka support (truncate to 256 dims for fast pre-filtering) which Voyage lacks.
-- Cohere's `input_type` asymmetric support matches Voyage's API shape.
-- If Voyage has reliability issues (they're a smaller company), Cohere is the seamless swap — same 1024 dims, same asymmetric API.
-- OpenAI's model lacks asymmetric support and its MTEB retrieval score (0.644) is significantly lower.
+**Why not split providers across vendors:**
+- It adds unnecessary key management and failure modes.
+- It increases integration/testing overhead with limited practical benefit for this project.
 
 **Why NOT self-hosted (BGE, E5-mistral, mxbai):**
 - Self-hosting means provisioning GPUs on GCP, managing model serving, handling scaling. That's a whole infra project.
-- The quality gap vs Voyage is real (0.640–0.668 vs 0.683).
+- Managed APIs still offer better quality/latency trade-offs for this product stage.
 - GPU instances cost $200+/month — far more than the $3 API cost for initial indexing.
 - Only makes sense at 10M+ embeddings/month or air-gapped deployments.
 
@@ -132,10 +115,10 @@ In my younger and more vulnerable years my father gave me some advice...
 
 ```python
 # backend/app/services/embedder.py
-import voyageai
+import cohere
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-client = voyageai.AsyncClient()
+client = cohere.AsyncClient()
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
 async def embed_documents(texts: list[str], batch_size: int = 128) -> list[list[float]]:
@@ -143,15 +126,23 @@ async def embed_documents(texts: list[str], batch_size: int = 128) -> list[list[
     all_embeddings = []
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
-        result = await client.embed(batch, model="voyage-3", input_type="document", truncation=True)
-        all_embeddings.extend(result.embeddings)
+        result = await client.embed(
+            model="embed-latest",
+            texts=batch,
+            input_type="search_document",
+        )
+        all_embeddings.extend(result.embeddings.float)
     return all_embeddings
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
 async def embed_query(query: str) -> list[float]:
     """Embed a single search query."""
-    result = await client.embed([build_query_text(query)], model="voyage-3", input_type="query", truncation=True)
-    return result.embeddings[0]
+    result = await client.embed(
+        model="embed-latest",
+        texts=[build_query_text(query)],
+        input_type="search_query",
+    )
+    return result.embeddings.float[0]
 ```
 
 ---
@@ -247,7 +238,7 @@ def detect_structure(text: str) -> tuple[DocumentStructure, dict]:
 
 **Strategy 3: Semantic Chunking** (for novels, essays, transcripts, flat prose)
 - Split into sentences
-- Embed consecutive sentences (batch via Voyage)
+- Embed consecutive sentences (batch via Cohere Embed)
 - When cosine similarity between sentence N and N+1 drops below threshold (0.3), start a new chunk
 - More expensive (requires embedding at chunk time) but produces the most coherent chunks for unstructured text
 - Fallback: if too expensive or embedding fails, use recursive strategy
@@ -363,14 +354,13 @@ Example:
 
 | Model | Latency (100 docs) | Quality (NDCG@10) | Cost |
 |-------|-------------------|-------------------|------|
-| **Cohere Rerank 3.5** | ~300ms | **0.67** | **$0.002/search** |
-| Voyage rerank-2 | ~250ms | 0.66 | $0.005/search |
+| **Cohere Rerank (latest)** | ~300ms | **0.67** | **$0.002/search** |
 | BGE-reranker-v2-m3 | ~500ms (CPU) | 0.64 | Free (GPU) |
 | Jina Reranker v2 | ~350ms | 0.63 | $0.002/search |
 | FlashRank | ~50ms (CPU) | 0.55 | Free (CPU) |
 | **Claude LLM-as-reranker** | ~2000ms | **~0.70** | ~$0.01/search |
 
-**Our choice: Cohere Rerank 3.5 (default) + Claude LLM (complex queries)**
+**Our choice: Cohere Rerank (latest) (default) + Claude LLM (complex queries)**
 
 - Cohere: Best quality-to-latency ratio. 300ms, 0.67 NDCG, $0.002/search. Handles 4096-token docs.
 - Claude LLM: 2 seconds but highest quality (~0.70). Reserved for comparison/multi-hop queries where the extra latency is worth it.
@@ -381,7 +371,7 @@ async def rerank(query, chunks, top_n=15, use_llm=False):
         return await _llm_rerank(query, chunks, top_n)
 
     response = await cohere_client.rerank(
-        model="rerank-v3.5", query=query,
+        model="rerank-latest", query=query,
         documents=[c["content"] for c in chunks],
         top_n=top_n, return_documents=False,
     )
@@ -481,7 +471,7 @@ User Query: "How does the authentication middleware work?"
 STAGE 1: QUERY UNDERSTANDING
   Rewrite: (self-contained, no change)
   Sub-queries: ["authentication middleware"]
-  Embed with Voyage voyage-3 (query mode)
+  Embed with Cohere Embed (query mode)
     │
     ▼
 STAGE 2: BROAD RETRIEVAL (parallel)
@@ -491,7 +481,7 @@ STAGE 2: BROAD RETRIEVAL (parallel)
   → RRF fusion → 100 candidates
     │
     ▼
-STAGE 3: RE-RANKING (Cohere Rerank 3.5)
+STAGE 3: RE-RANKING (Cohere Rerank latest)
   Score all 100 (query, chunk) pairs → top 15
   auth-middleware.ts/chunk-3 (0.96), jwt-config/chunk-1 (0.89), ...
     │
@@ -552,7 +542,7 @@ ENRICH — Per chunk (async, batched)
   Attach document summary prefix
     │
     ▼
-EMBED — Voyage voyage-3 (batches of 128)
+EMBED — Cohere Embed latest (batches of 128)
   Embed contextual chunk text (with prefix)
   Embed hypothetical questions (separate vector)
     │

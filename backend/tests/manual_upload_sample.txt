@@ -1,0 +1,11 @@
+RAG backend smoke test document.
+
+This file verifies indexing and retrieval functionality.
+The key verification phrase is: nebula-quantum-river.
+
+Additional context:
+- The architecture uses adaptive chunking with overlap.
+- Retrieval combines dense vectors and sparse lexical features.
+- User feedback can personalize reranking.
+
+If search is working, queries for nebula-quantum-river should return this document.

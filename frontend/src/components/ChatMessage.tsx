@@ -7,14 +7,21 @@ interface Props {
 }
 
 export function ChatMessage({ message, onCitationClick }: Props) {
-  // TODO: render user/assistant bubbles with inline [Source N] citation links
   return (
     <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-      <div className="max-w-2xl rounded-lg p-4">
-        <p>{message.content}</p>
-        {message.citations?.map((c, i) => (
-          <CitationBadge key={i} citation={c} onClick={() => onCitationClick?.(c)} />
-        ))}
+      <div
+        className={`max-w-3xl rounded-xl p-4 ${
+          message.role === "user" ? "bg-blue-600 text-white" : "bg-white border text-slate-900"
+        }`}
+      >
+        <p className="whitespace-pre-wrap">{message.content}</p>
+        {message.citations?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {message.citations.map((c, i) => (
+              <CitationBadge key={`${c.chunk_id}-${i}`} citation={c} onClick={() => onCitationClick?.(c)} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

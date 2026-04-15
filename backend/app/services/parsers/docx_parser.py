@@ -1,6 +1,8 @@
 from docx import Document
 import io
 
+from app.config import settings
+
 
 class DocxParser:
     """
@@ -9,18 +11,17 @@ class DocxParser:
     Word has no real "pages" — we simulate them at ~3000 chars.
     """
 
-    PAGE_CHAR_LIMIT = 3000
-
     def extract(self, file_bytes: bytes) -> list[dict]:
         doc = Document(io.BytesIO(file_bytes))
         pages = []
         current_text = ""
         char_count = 0
+        page_char_limit = max(500, settings.extract_virtual_page_char_limit)
 
         for para in doc.paragraphs:
             current_text += para.text + "\n"
             char_count += len(para.text)
-            if char_count >= self.PAGE_CHAR_LIMIT:
+            if char_count >= page_char_limit:
                 pages.append({"page": len(pages) + 1, "text": current_text})
                 current_text = ""
                 char_count = 0

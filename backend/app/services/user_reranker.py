@@ -9,9 +9,10 @@ Applies personalized preference scores based on:
 
 Cold-start safe: skips for users with < 10 feedback signals.
 """
-import asyncio
 import math
 from uuid import UUID
+
+from sqlalchemy import text
 
 
 COLD_START_THRESHOLD = 10
@@ -43,15 +44,15 @@ async def apply_user_signals(
     chunk_ids = [c["id"] for c in chunks]
     doc_ids = [c["document_id"] for c in chunks]
 
-    chunk_prefs, doc_prefs, similar_prefs = await asyncio.gather(
-        _get_chunk_preferences(user_id, chunk_ids, db),
-        _get_doc_preferences(user_id, doc_ids, db),
-        _get_similar_query_preferences(user_id, query_embedding, chunk_ids, db),
-    )
+    # Run sequentially on the same DB session/connection.
+    # asyncpg does not allow overlapping operations on one connection.
+    chunk_prefs = await _get_chunk_preferences(user_id, chunk_ids, db)
+    doc_prefs = await _get_doc_preferences(user_id, doc_ids, db)
+    similar_prefs = await _get_similar_query_preferences(user_id, query_embedding, chunk_ids, db)
 
     for chunk in chunks:
-        cid = chunk["id"]
-        did = chunk["document_id"]
+        cid = str(chunk["id"])
+        did = str(chunk["document_id"])
         chunk["final_score"] = (
             WEIGHTS["rerank_score"] * chunk.get("rerank_score", 0.5) +
             WEIGHTS["chunk_pref"] * _sigmoid(chunk_prefs.get(cid, 0.0)) +
@@ -63,20 +64,76 @@ async def apply_user_signals(
 
 
 async def _get_feedback_count(user_id: UUID, db) -> int:
-    # TODO: SELECT COUNT(*) FROM user_feedback WHERE user_id = :uid
-    return 0
+    count = (
+        await db.execute(
+            text("SELECT COUNT(*) FROM user_feedback WHERE user_id = :uid"),
+            {"uid": str(user_id)},
+        )
+    ).scalar_one()
+    return int(count or 0)
 
 
 async def _get_chunk_preferences(user_id: UUID, chunk_ids: list, db) -> dict:
-    # TODO: query user_chunk_preferences materialized view
-    return {}
+    if not chunk_ids:
+        return {}
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT chunk_id, preference_score
+                FROM user_chunk_preferences
+                WHERE user_id = :uid
+                  AND chunk_id = ANY(:chunk_ids)
+                """
+            ),
+            {"uid": str(user_id), "chunk_ids": [str(cid) for cid in chunk_ids]},
+        )
+    ).mappings().all()
+    return {str(r["chunk_id"]): float(r["preference_score"] or 0.0) for r in rows}
 
 
 async def _get_doc_preferences(user_id: UUID, doc_ids: list, db) -> dict:
-    # TODO: query user_document_preferences materialized view
-    return {}
+    if not doc_ids:
+        return {}
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT document_id, doc_preference_score
+                FROM user_document_preferences
+                WHERE user_id = :uid
+                  AND document_id = ANY(:doc_ids)
+                """
+            ),
+            {"uid": str(user_id), "doc_ids": [str(did) for did in doc_ids]},
+        )
+    ).mappings().all()
+    return {str(r["document_id"]): float(r["doc_preference_score"] or 0.0) for r in rows}
 
 
 async def _get_similar_query_preferences(user_id: UUID, query_embedding: list[float], chunk_ids: list, db) -> dict:
-    # TODO: find similar past queries (cosine > 0.75) and aggregate their preferred chunks
-    return {}
+    if not chunk_ids or not query_embedding:
+        return {}
+
+    query_vec = "[" + ",".join(f"{float(v):.8f}" for v in query_embedding) + "]"
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT uf.chunk_id, SUM(uf.signal_weight) AS score
+                FROM user_feedback uf
+                WHERE uf.user_id = :uid
+                  AND uf.chunk_id = ANY(:chunk_ids)
+                  AND uf.query_embedding IS NOT NULL
+                  AND (uf.query_embedding <=> CAST(:query_vec AS vector)) <= 0.25
+                GROUP BY uf.chunk_id
+                """
+            ),
+            {
+                "uid": str(user_id),
+                "chunk_ids": [str(cid) for cid in chunk_ids],
+                "query_vec": query_vec,
+            },
+        )
+    ).mappings().all()
+    return {str(r["chunk_id"]): float(r["score"] or 0.0) for r in rows}
