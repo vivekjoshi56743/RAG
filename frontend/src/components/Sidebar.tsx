@@ -42,13 +42,6 @@ export function Sidebar({ folders, activeFolderId, onFolderClick }: Props) {
         ))}
 
         <div className="mt-5 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Folders</div>
-        <button
-          onClick={() => onFolderClick?.(null)}
-          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-          type="button"
-        >
-          📚 All Documents
-        </button>
         {folders.map((f) => (
           <button
             key={f.id}

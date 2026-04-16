@@ -17,7 +17,9 @@ export function SearchResultItem({ result, onClick }: Props) {
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">{result.doc_name}</span>
-        <span className="text-xs text-slate-500">p.{page} · relevance {score.toFixed(2)}</span>
+        <span className="text-xs text-slate-500">
+          {page && page !== "-" ? `p.${page} · ` : ""}relevance {score.toFixed(2)}
+        </span>
       </div>
       <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-700">{snippet}</p>
     </button>

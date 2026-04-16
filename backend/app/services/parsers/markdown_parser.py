@@ -11,7 +11,7 @@ class MarkdownParser:
         text = file_bytes.decode("utf-8")
 
         # Strip markdown syntax, preserve readable text
-        text = re.sub(r'```[\s\S]*?```', '[code block]', text)
+        # text = re.sub(r'```[\s\S]*?```', '[code block]', text)
         text = re.sub(r'!\[.*?\]\(.*?\)', '[image]', text)
         text = re.sub(r'\[(.+?)\]\(.*?\)', r'\1', text)
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { MarkdownViewer } from "@/components/MarkdownViewer";
 import { SearchResultItem } from "@/components/SearchResult";
 import { listDocuments, listFolders, search } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
@@ -177,9 +178,9 @@ export default function SearchPage() {
                   </span>
                 ) : null}
               </div>
-              <pre className="whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-800 font-sans">
-                {viewerText || "No text content available for this chunk."}
-              </pre>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 font-sans text-sm">
+                <MarkdownViewer content={viewerText || "No text content available for this chunk."} />
+              </div>
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-slate-500">
