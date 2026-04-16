@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { AppShell } from "@/components/AppShell";
@@ -24,7 +24,7 @@ import {
 import { useRequireAuth } from "@/lib/auth";
 import type { AccessRole, Document, Folder, PermissionEntry } from "@/lib/types";
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
   const { user, loading, getIdToken } = useRequireAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -409,5 +409,13 @@ export default function DocumentsPage() {
         onCancel={() => { setFolderToRename(null); setRenameValue(""); }}
       />
     </AppShell>
+  );
+}
+
+export default function DocumentsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-slate-500">Loading...</div>}>
+      <DocumentsPageContent />
+    </Suspense>
   );
 }

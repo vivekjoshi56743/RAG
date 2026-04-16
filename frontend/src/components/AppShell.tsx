@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import type { Folder } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
@@ -20,7 +20,9 @@ export function AppShell({ title, folders, actions, children }: Props) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
-      <Sidebar folders={folders} />
+      <Suspense fallback={<div className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800" />}>
+        <Sidebar folders={folders} />
+      </Suspense>
       <main className="flex h-full flex-1 flex-col p-5 lg:p-6 overflow-hidden">
         <header className="mb-5 shrink-0 flex flex-wrap items-center justify-between gap-4">
           <div>
