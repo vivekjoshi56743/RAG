@@ -433,7 +433,7 @@ export default function ChatPage() {
                     <div>
                       <p className="font-medium text-slate-900">
                         Source: {activeCitation.doc_name}
-                        {activeCitation.page != null && activeCitation.page !== "-" ? ` · p.${activeCitation.page}` : ""}
+                        {activeCitation.page != null ? ` · p.${activeCitation.page}` : ""}
                       </p>
                       <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">
                         {activeCitation.snippet || "No snippet available for this citation."}

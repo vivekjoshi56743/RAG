@@ -19,7 +19,7 @@ export function CitationBadge({ citation, onClick, inlineIndex }: Props) {
       {inlineIndex !== undefined ? (
         `[${inlineIndex}]`
       ) : (
-        <>{citation.doc_name}{citation.page != null && citation.page !== "-" ? ` · p.${citation.page}` : ""}</>
+        <>{citation.doc_name}{citation.page != null ? ` · p.${citation.page}` : ""}</>
       )}
     </button>
   );
