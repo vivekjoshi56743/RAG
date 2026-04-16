@@ -106,16 +106,16 @@ export default function SearchPage() {
   const onSelectResult = async (result: SearchResult) => {
     setSelectedResult(result);
     setViewerText(result.content ?? result.snippet ?? "");
-    const initialFilePath = result.file_path ?? "";
+    const initialFilePath = result.signed_url ?? result.file_path ?? "";
     setViewerDocPath(initialFilePath);
-    setViewerKind(inferViewerKind(result, initialFilePath, result.mime_type, result.document_type));
+    setViewerKind(inferViewerKind(result, result.file_path ?? "", result.mime_type, result.document_type));
     const docId = result.document_id ?? result.doc_id;
     if (!docId) return;
     const token = await getIdToken();
     if (!token) return;
     try {
       const doc = await getDocument(docId, token);
-      setViewerDocPath(doc.file_path ?? "");
+      setViewerDocPath(doc.signed_url ?? doc.file_path ?? "");
       setViewerKind(inferViewerKind(result, doc.file_path ?? "", doc.mime_type, doc.document_type));
     } catch {
       if (!initialFilePath) {

@@ -135,7 +135,15 @@ async def get_document(doc_id: UUID, user=Depends(get_current_user), db=Depends(
     ).mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="Document not found")
-    return dict(row)
+        
+    doc = dict(row)
+    if doc.get("file_path"):
+        from app.services.storage import generate_signed_url
+        try:
+            doc["signed_url"] = generate_signed_url(doc["file_path"])
+        except Exception as e:
+            doc["signed_url"] = None
+    return doc
 
 
 @router.delete("/{doc_id}")

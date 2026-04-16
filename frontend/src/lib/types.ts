@@ -12,6 +12,7 @@ export interface Document {
   user_id: string;
   name: string;
   file_path: string;
+  signed_url?: string | null;
   file_size?: number | null;
   mime_type?: string | null;
   status: DocumentStatus;
@@ -91,6 +92,7 @@ export interface SearchResult {
   rrf_score?: number;
   signal_score?: number;
   file_path?: string | null;
+  signed_url?: string | null;
   mime_type?: string | null;
   document_type?: string | null;
 }
