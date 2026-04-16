@@ -376,7 +376,7 @@ async def share_conversation(conv_id: UUID, user=Depends(get_current_user), db=D
         text(
             """
             INSERT INTO shared_threads (conversation_id, owner_id, share_token, title, snapshot)
-            VALUES (:conv_id, :owner_id, :token, :title, :snapshot::jsonb)
+            VALUES (:conv_id, :owner_id, :token, :title, CAST(:snapshot AS jsonb))
             """
         ),
         {
