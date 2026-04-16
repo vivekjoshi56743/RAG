@@ -51,8 +51,16 @@ def _map_prompt(window: str, doc_name: str, window_idx: int, total: int) -> str:
 
 
 def _default_fallback(text: str) -> dict:
+    # Use the first complete sentence(s) rather than a raw char-slice.
+    excerpt = (text or "").strip()[:600]
+    # Try to end at a sentence boundary.
+    for punct in (".", "!", "?"):
+        last = excerpt.rfind(punct)
+        if last > 80:  # need some minimum content
+            excerpt = excerpt[: last + 1]
+            break
     return {
-        "summary": (text or "")[:400],
+        "summary": excerpt or (text or "")[:400],
         "key_topics": [],
         "entities": [],
         "document_type": "general",
@@ -123,7 +131,7 @@ async def _summarize_window(window: str, doc_name: str, idx: int, total: int) ->
         text_out, _ = await complete_text(
             "summary",
             prompt,
-            max_tokens=400,
+            max_tokens=600,   # raised: 4-6 dense sentences can exceed 400 tokens
             temperature=0.0,
         )
         return text_out.strip()
@@ -150,21 +158,22 @@ async def generate_summary(text: str, doc_name: str) -> dict:
             raw, _ = await complete_text(
                 "summary",
                 prompt,
-                max_tokens=1200,
+                max_tokens=2048,  # raised: JSON with 5-8 sentences + topics + entities needs headroom
                 temperature=0.0,
             )
             return _parse_summary_json(raw)
         except Exception:
             logger.exception("Single-pass summarizer failed")
-            return _default_fallback(text[:400])
+            return _default_fallback(text)
 
     # Map phase: summarize each window concurrently.
+    # return_exceptions=True so a single window failure doesn't abort the whole gather.
     windows = _split_windows(text)
     map_results = await asyncio.gather(
         *[_summarize_window(w, doc_name, i, len(windows)) for i, w in enumerate(windows)],
-        return_exceptions=False,
+        return_exceptions=True,
     )
-    partials = [m for m in map_results if m]
+    partials = [m for m in map_results if isinstance(m, str) and m]
 
     if not partials:
         # All map calls failed — fall back to head-only single-pass.
@@ -172,11 +181,17 @@ async def generate_summary(text: str, doc_name: str) -> dict:
         return await generate_summary(text[:SINGLE_PASS_CHAR_LIMIT], doc_name)
 
     # Reduce phase: feed the partials into the final JSON prompt.
-    joined = "\n\n".join(
-        f"[Section {i + 1}]\n{p}" for i, p in enumerate(partials)
-    )
+    sections = [f"[Section {i + 1}]\n{p}" for i, p in enumerate(partials)]
+    joined = "\n\n".join(sections)
     if len(joined) > REDUCE_BUDGET_CHARS:
-        joined = joined[:REDUCE_BUDGET_CHARS]
+        # Trim at a clean section boundary rather than a hard char-slice.
+        trimmed = ""
+        for section in sections:
+            candidate = trimmed + ("\n\n" if trimmed else "") + section
+            if len(candidate) > REDUCE_BUDGET_CHARS:
+                break
+            trimmed = candidate
+        joined = trimmed or sections[0][:REDUCE_BUDGET_CHARS]
 
     reduce_prompt = _final_prompt(joined, doc_name) + (
         "\n\nNote: The text above is a set of per-section summaries of the real document. "
@@ -186,7 +201,7 @@ async def generate_summary(text: str, doc_name: str) -> dict:
         raw, _ = await complete_text(
             "summary",
             reduce_prompt,
-            max_tokens=1200,
+            max_tokens=2048,  # raised: same reasoning as single-pass
             temperature=0.0,
         )
         return _parse_summary_json(raw)
