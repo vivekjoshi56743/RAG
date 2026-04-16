@@ -111,9 +111,11 @@ function normalizeDocumentSummary(raw?: string | null): string {
     // Not JSON; continue with plain-text cleanup.
   }
 
-  const summaryMatch = unfenced.match(/"summary"\s*:\s*"([^"]+)/i);
+  // Match the summary value, allowing escaped quotes (\\" inside the string).
+  const summaryMatch = unfenced.match(/"summary"\s*:\s*"((?:[^\\"]|\\.)*)/);
   if (summaryMatch?.[1]) {
-    return summaryMatch[1].trim();
+    // Unescape any escaped quotes in the extracted value.
+    return summaryMatch[1].replace(/\\"/g, '"').trim();
   }
 
   return unfenced;
