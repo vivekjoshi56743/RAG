@@ -109,7 +109,10 @@ export async function search(
 // Chat
 export const createConversation = (token: string) =>
   request<Conversation>("/api/conversations", { method: "POST", token });
-export const listConversations = (token: string) => request<Conversation[]>("/api/conversations", { token });
+export const listConversations = (token: string, q?: string) => {
+  const url = q ? `/api/conversations?q=${encodeURIComponent(q)}` : "/api/conversations";
+  return request<Conversation[]>(url, { token });
+};
 export const getConversation = (id: string, token: string) =>
   request<ConversationDetail>(`/api/conversations/${id}`, { token });
 export const renameConversation = (id: string, title: string, token: string) =>

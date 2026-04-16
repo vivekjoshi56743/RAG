@@ -43,26 +43,31 @@ export default function ChatPage() {
   const [renameValue, setRenameValue] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+
+  const debouncedSearchQuery = useDebounce(chatSearchQuery, 300);
 
   const activeConversation = useMemo(
     () => conversations.find((conv) => conv.id === activeConversationId) ?? null,
     [conversations, activeConversationId],
   );
 
-  const loadConversations = async () => {
+  const loadConversations = async (query?: string) => {
     const token = await getIdToken();
     if (!token) return;
-    const [rows, folderRows] = await Promise.all([listConversations(token), listFolders(token)]);
+    const [rows, folderRows] = await Promise.all([listConversations(token, query), listFolders(token)]);
     setConversations(rows);
     setFolders(folderRows);
-    if (!rows.length) {
+    if (!rows.length && !query) {
       const created = await createConversation(token);
       setConversations([created]);
       setActiveConversationId(created.id);
       return;
     }
-    setActiveConversationId((current) => current || rows[0].id);
+    if (!query && rows.length && !activeConversationId) {
+        setActiveConversationId(rows[0].id);
+    }
   };
 
   const loadMessages = async (conversationId: string) => {
@@ -79,9 +84,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      void loadConversations();
+      void loadConversations(debouncedSearchQuery);
     }
-  }, [loading, user]);
+  }, [loading, user, debouncedSearchQuery]);
 
   useEffect(() => {
     if (activeConversationId) {
@@ -254,7 +259,7 @@ export default function ChatPage() {
         }
       }
 
-      await Promise.all([loadMessages(activeConversationId), loadConversations()]);
+      await Promise.all([loadMessages(activeConversationId), loadConversations(debouncedSearchQuery)]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
       setMessages((prev) =>
@@ -310,7 +315,16 @@ export default function ChatPage() {
     >
       <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
         <aside className="surface-card flex h-full flex-col overflow-y-auto p-3">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">Conversations</h2>
+          <div className="mb-3 space-y-2">
+            <h2 className="text-sm font-semibold text-slate-700">Conversations</h2>
+            <input
+              type="text"
+              value={chatSearchQuery}
+              onChange={(e) => setChatSearchQuery(e.target.value)}
+              placeholder="Search chats..."
+              className="input-base w-full text-sm"
+            />
+          </div>
           <div className="space-y-2">
             {conversations.map((conv) => (
               <div
@@ -385,6 +399,11 @@ export default function ChatPage() {
                 )}
               </div>
             ))}
+            {conversations.length === 0 && (
+              <div className="p-2 text-center text-xs text-slate-500">
+                No conversations found.
+              </div>
+            )}
           </div>
         </aside>
 
@@ -491,4 +510,15 @@ function deriveTitleFromPrompt(prompt: string): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
   return titled.slice(0, 120);
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
 }

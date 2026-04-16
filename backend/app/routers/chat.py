@@ -4,7 +4,8 @@ import secrets
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -92,35 +93,71 @@ async def create_conversation(user=Depends(get_current_user), db=Depends(get_db)
 
 
 @router.get("")
-async def list_conversations(user=Depends(get_current_user), db=Depends(get_db)):
+async def list_conversations(
+    q: str | None = Query(None),
+    user=Depends(get_current_user), db=Depends(get_db)
+):
     """List user's conversations."""
     user_row = await get_or_create_user(db, user)
-    rows = (
-        await db.execute(
-            text(
-                """
-                SELECT
-                    c.id,
-                    c.title,
-                    c.created_at,
-                    c.updated_at,
-                    lm.content AS last_message,
-                    lm.created_at AS last_message_at
-                FROM conversations c
-                LEFT JOIN LATERAL (
-                    SELECT m.content, m.created_at
-                    FROM messages m
-                    WHERE m.conversation_id = c.id
-                    ORDER BY m.created_at DESC
-                    LIMIT 1
-                ) lm ON TRUE
-                WHERE c.user_id = :uid
-                ORDER BY c.updated_at DESC
-                """
-            ),
-            {"uid": str(user_row["id"])},
+
+    if q:
+        q_pattern = f"%{q}%"
+        query_sql = text(
+            """
+            SELECT
+                c.id,
+                c.title,
+                c.created_at,
+                c.updated_at,
+                COALESCE(
+                    (SELECT m.content FROM messages m WHERE m.conversation_id = c.id AND m.content ILIKE :q_pattern ORDER BY m.created_at DESC LIMIT 1),
+                    (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)
+                ) AS last_message,
+                lm_time.last_message_at
+            FROM conversations c
+            LEFT JOIN LATERAL (
+                SELECT m.created_at AS last_message_at
+                FROM messages m
+                WHERE m.conversation_id = c.id
+                ORDER BY m.created_at DESC
+                LIMIT 1
+            ) lm_time ON TRUE
+            WHERE c.user_id = :uid
+            AND (
+                c.title ILIKE :q_pattern
+                OR EXISTS (
+                    SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.content ILIKE :q_pattern
+                )
+            )
+            ORDER BY c.updated_at DESC
+            """
         )
-    ).mappings().all()
+        params = {"uid": str(user_row["id"]), "q_pattern": q_pattern}
+    else:
+        query_sql = text(
+            """
+            SELECT
+                c.id,
+                c.title,
+                c.created_at,
+                c.updated_at,
+                lm.content AS last_message,
+                lm.created_at AS last_message_at
+            FROM conversations c
+            LEFT JOIN LATERAL (
+                SELECT m.content, m.created_at
+                FROM messages m
+                WHERE m.conversation_id = c.id
+                ORDER BY m.created_at DESC
+                LIMIT 1
+            ) lm ON TRUE
+            WHERE c.user_id = :uid
+            ORDER BY c.updated_at DESC
+            """
+        )
+        params = {"uid": str(user_row["id"])}
+
+    rows = (await db.execute(query_sql, params)).mappings().all()
     return [dict(r) for r in rows]
 
 
@@ -347,7 +384,7 @@ async def share_conversation(conv_id: UUID, user=Depends(get_current_user), db=D
             "owner_id": str(user_row["id"]),
             "token": token,
             "title": conv["title"],
-            "snapshot": json.dumps(snapshot),
+            "snapshot": json.dumps(jsonable_encoder(snapshot)),
         },
     )
     await db.commit()
