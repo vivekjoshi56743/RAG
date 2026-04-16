@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { PDFViewer, type ViewerKind } from "@/components/PDFViewer";
 import { SearchResultItem } from "@/components/SearchResult";
-import { getDocument, listDocuments, listFolders, search } from "@/lib/api";
+import { listDocuments, listFolders, search } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth";
 import type { Document, Folder, SearchResult } from "@/lib/types";
 
@@ -17,14 +16,7 @@ function pickRelevanceScore(result: SearchResult): number {
   return 0;
 }
 
-function inferViewerKind(result: SearchResult, filePath?: string, mimeType?: string | null, documentType?: string | null): ViewerKind {
-  const source = `${mimeType ?? ""} ${documentType ?? ""} ${result.doc_name ?? ""} ${filePath ?? ""}`.toLowerCase();
-  if (source.includes("pdf") || source.endsWith(".pdf")) return "pdf";
-  if (source.includes("markdown") || source.includes("text") || source.endsWith(".md") || source.endsWith(".txt") || source.endsWith(".docx")) {
-    return "text";
-  }
-  return "unknown";
-}
+
 
 export default function SearchPage() {
   const { user, loading, getIdToken } = useRequireAuth();
@@ -38,8 +30,6 @@ export default function SearchPage() {
   const [limit, setLimit] = useState(20);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
-  const [viewerDocPath, setViewerDocPath] = useState("");
-  const [viewerKind, setViewerKind] = useState<ViewerKind>("unknown");
   const [viewerText, setViewerText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -103,26 +93,9 @@ export default function SearchPage() {
     [searching, results.length],
   );
 
-  const onSelectResult = async (result: SearchResult) => {
+  const onSelectResult = (result: SearchResult) => {
     setSelectedResult(result);
     setViewerText(result.content ?? result.snippet ?? "");
-    const initialFilePath = result.signed_url ?? result.file_path ?? "";
-    setViewerDocPath(initialFilePath);
-    setViewerKind(inferViewerKind(result, result.file_path ?? "", result.mime_type, result.document_type));
-    const docId = result.document_id ?? result.doc_id;
-    if (!docId) return;
-    const token = await getIdToken();
-    if (!token) return;
-    try {
-      const doc = await getDocument(docId, token);
-      setViewerDocPath(doc.signed_url ?? doc.file_path ?? "");
-      setViewerKind(inferViewerKind(result, doc.file_path ?? "", doc.mime_type, doc.document_type));
-    } catch {
-      if (!initialFilePath) {
-        setViewerDocPath("");
-        setViewerKind("unknown");
-      }
-    }
   };
 
   if (loading || (!user && !loading)) {
@@ -191,18 +164,26 @@ export default function SearchPage() {
           </div>
         </section>
 
-        <section className="surface-card min-h-[580px] overflow-hidden p-0">
+        <section className="surface-card min-h-[580px] overflow-auto p-5">
           {selectedResult ? (
-            <PDFViewer
-              url={viewerDocPath}
-              initialPage={selectedResult.page ?? selectedResult.page_number ?? 1}
-              highlightText={selectedResult.snippet}
-              viewerKind={viewerKind}
-              textPreview={viewerText}
-            />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+                  {selectedResult.doc_name}
+                </span>
+                {(selectedResult.page ?? selectedResult.page_number) ? (
+                  <span className="text-xs text-slate-500">
+                    p.{selectedResult.page ?? selectedResult.page_number}
+                  </span>
+                ) : null}
+              </div>
+              <pre className="whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-800 font-sans">
+                {viewerText || "No text content available for this chunk."}
+              </pre>
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Select a result to view source context.
+              Select a result to view its text content.
             </div>
           )}
         </section>
