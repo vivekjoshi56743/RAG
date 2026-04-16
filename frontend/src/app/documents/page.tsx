@@ -203,8 +203,8 @@ export default function DocumentsPage() {
         </button>
       }
     >
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
-        <section className="space-y-4">
+      <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
+        <section className="h-full space-y-4 overflow-y-auto pr-1 pb-4">
           <UploadZone onUpload={onUpload} />
           {busy ? <p className="text-sm text-slate-500">Uploading...</p> : null}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -271,7 +271,7 @@ export default function DocumentsPage() {
           </div>
         </section>
 
-        <section className="space-y-4">
+        <section className="h-full space-y-4 overflow-y-auto pr-1 pb-4">
           <div className="surface-card p-4">
             <h2 className="text-lg font-semibold text-slate-900">Folders</h2>
             <div className="mt-3 flex gap-2">

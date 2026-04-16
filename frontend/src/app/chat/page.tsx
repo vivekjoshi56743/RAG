@@ -308,8 +308,8 @@ export default function ChatPage() {
         </div>
       }
     >
-      <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
-        <aside className="surface-card min-h-[580px] p-3">
+      <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
+        <aside className="surface-card flex h-full flex-col overflow-y-auto p-3">
           <h2 className="mb-2 text-sm font-semibold text-slate-700">Conversations</h2>
           <div className="space-y-2">
             {conversations.map((conv) => (
@@ -388,7 +388,7 @@ export default function ChatPage() {
           </div>
         </aside>
 
-        <section className="surface-card flex min-h-[580px] flex-col overflow-hidden p-0">
+        <section className="surface-card flex h-full flex-col overflow-hidden p-0">
           <div className="flex-1 overflow-auto bg-slate-50 p-4">
             <div className="space-y-3">
               {messages.map((message) => (

@@ -105,8 +105,8 @@ export default function SearchPage() {
 
   return (
     <AppShell title="Semantic Search" folders={folders}>
-      <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[1.25fr_1fr]">
-        <section className="surface-card min-h-[580px] overflow-auto p-4">
+      <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-[1.25fr_1fr]">
+        <section className="surface-card flex h-full flex-col overflow-y-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <input
               value={query}
@@ -165,7 +165,7 @@ export default function SearchPage() {
           </div>
         </section>
 
-        <section className="surface-card min-h-[580px] overflow-auto p-5">
+        <section className="surface-card flex h-full flex-col overflow-y-auto p-5">
           {selectedResult ? (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
