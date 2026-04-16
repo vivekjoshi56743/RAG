@@ -22,19 +22,30 @@ export function ChatMessage({ message, onCitationClick }: Props) {
         {isUser ? (
           <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
         ) : (
-          <MarkdownViewer content={message.content} />
+          <MarkdownViewer 
+            content={message.content} 
+            citations={message.citations}
+            onCitationClick={onCitationClick}
+          />
         )}
-        {message.citations?.length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {message.citations.map((c, i) => (
-              <CitationBadge
-                key={`${c.chunk_id}-${i}`}
-                citation={c}
-                onClick={onCitationClick ? () => onCitationClick(c) : undefined}
-              />
-            ))}
-          </div>
-        ) : null}
+        {(() => {
+          const inlineSources = new Set(Array.from(message.content.matchAll(/\[Source\s+(\d+)\]/gi)).map(m => parseInt(m[1], 10)));
+          const unreferencedCitations = message.citations?.filter(c => !inlineSources.has(c.source)) || [];
+
+          if (unreferencedCitations.length === 0) return null;
+
+          return (
+            <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+              {unreferencedCitations.map((c, i) => (
+                <CitationBadge
+                  key={`${c.chunk_id}-${i}`}
+                  citation={c}
+                  onClick={onCitationClick ? () => onCitationClick(c) : undefined}
+                />
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

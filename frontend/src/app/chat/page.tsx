@@ -432,7 +432,8 @@ export default function ChatPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-slate-900">
-                        Source: {activeCitation.doc_name} · p.{activeCitation.page ?? "-"}
+                        Source: {activeCitation.doc_name}
+                        {activeCitation.page != null && activeCitation.page !== "-" ? ` · p.${activeCitation.page}` : ""}
                       </p>
                       <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">
                         {activeCitation.snippet || "No snippet available for this citation."}
