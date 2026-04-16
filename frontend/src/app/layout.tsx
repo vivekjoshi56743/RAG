@@ -10,11 +10,15 @@ export const metadata: Metadata = {
   description: "Intelligent document search and chat",
 };
 
+import { Providers } from "@/components/Providers";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>
+          <AuthProvider>{children}</AuthProvider>
+        </Providers>
       </body>
     </html>
   );

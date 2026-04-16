@@ -1,7 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import toast from "react-hot-toast";
+import { Copy, Plus, Share2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChatMessage } from "@/components/ChatMessage";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import {
   createConversation,
   deleteConversation,
@@ -44,6 +47,7 @@ export default function ChatPage() {
   const [renaming, setRenaming] = useState(false);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [convToDelete, setConvToDelete] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const debouncedSearchQuery = useDebounce(chatSearchQuery, 300);
@@ -95,7 +99,6 @@ export default function ChatPage() {
   }, [activeConversationId]);
 
   const onCreateConversation = async () => {
-    setError(null);
     try {
       const token = await getIdToken();
       if (!token) return;
@@ -103,30 +106,33 @@ export default function ChatPage() {
       setConversations((prev) => [created, ...prev]);
       setActiveConversationId(created.id);
       setMessages([]);
+      toast.success("New chat started");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed creating conversation");
+      toast.error(err instanceof Error ? err.message : "Failed creating conversation");
     }
   };
 
-  const onDeleteConversation = async (conversationId: string) => {
-    if (!window.confirm("Delete this conversation?")) return;
-    setError(null);
+  const performDeleteConversation = async () => {
+    if (!convToDelete) return;
     try {
       const token = await getIdToken();
       if (!token) return;
-      await deleteConversation(conversationId, token);
-      const remaining = conversations.filter((conv) => conv.id !== conversationId);
+      await deleteConversation(convToDelete, token);
+      const remaining = conversations.filter((conv) => conv.id !== convToDelete);
       setConversations(remaining);
       if (!remaining.length) {
         const created = await createConversation(token);
         setConversations([created]);
         setActiveConversationId(created.id);
         setMessages([]);
-      } else if (activeConversationId === conversationId) {
+      } else if (activeConversationId === convToDelete) {
         setActiveConversationId(remaining[0].id);
       }
+      toast.success("Conversation deleted");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed deleting conversation");
+      toast.error(err instanceof Error ? err.message : "Failed deleting conversation");
+    } finally {
+      setConvToDelete(null);
     }
   };
 
@@ -145,7 +151,7 @@ export default function ChatPage() {
   const submitRenameConversation = async (conversationId: string) => {
     const title = renameValue.trim();
     if (!title) {
-      setError("Conversation title cannot be empty");
+      toast.error("Conversation title cannot be empty");
       return;
     }
 
@@ -168,8 +174,9 @@ export default function ChatPage() {
         ),
       );
       cancelRenameConversation();
+      toast.success("Renamed");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed renaming conversation");
+      toast.error(err instanceof Error ? err.message : "Failed renaming conversation");
     } finally {
       setRenaming(false);
     }
@@ -255,13 +262,13 @@ export default function ChatPage() {
             }
           }
         } else if (event.type === "error") {
-          setError(event.message || "Assistant stream failed");
+          toast.error(event.message || "Assistant stream failed");
         }
       }
 
       await Promise.all([loadMessages(activeConversationId), loadConversations(debouncedSearchQuery)]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      toast.error(err instanceof Error ? err.message : "Failed to send message");
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
@@ -282,8 +289,9 @@ export default function ChatPage() {
       const response = await shareConversation(activeConversationId, token);
       const base = window.location.origin;
       setShareUrl(`${base}/shared/${response.share_token}`);
+      toast.success("Share link generated");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed sharing conversation");
+      toast.error(err instanceof Error ? err.message : "Failed sharing conversation");
     }
   };
 
@@ -295,19 +303,19 @@ export default function ChatPage() {
     <AppShell
       title="Chat"
       folders={folders}
-      activeFolderId={selectedFolderId || null}
-      onFolderClick={(folderId) => setSelectedFolderId(folderId ?? "")}
       actions={
         <div className="flex gap-2">
-          <button onClick={() => void onCreateConversation()} className="btn-primary" type="button">
+          <button onClick={() => void onCreateConversation()} className="btn-primary flex items-center gap-1.5" type="button">
+            <Plus className="h-4 w-4" />
             New Chat
           </button>
           <button
             onClick={() => void onShareConversation()}
             disabled={!activeConversation}
-            className="btn-secondary"
+            className="btn-secondary flex items-center gap-1.5"
             type="button"
           >
+            <Share2 className="h-4 w-4" />
             Share
           </button>
         </div>
@@ -316,7 +324,7 @@ export default function ChatPage() {
       <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
         <aside className="surface-card flex h-full flex-col overflow-y-auto p-3">
           <div className="mb-3 space-y-2">
-            <h2 className="text-sm font-semibold text-slate-700">Conversations</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Conversations</h2>
             <input
               type="text"
               value={chatSearchQuery}
@@ -331,8 +339,8 @@ export default function ChatPage() {
                 key={conv.id}
                 className={`rounded-xl border p-2 transition ${
                   conv.id === activeConversationId
-                    ? "border-brand-300 bg-brand-50 shadow-sm"
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    ? "border-brand-300 bg-brand-50 shadow-sm dark:border-brand-500/40 dark:bg-brand-500/10"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-slate-600 dark:hover:bg-slate-800"
                 }`}
               >
                 <button
@@ -340,8 +348,8 @@ export default function ChatPage() {
                   className="w-full rounded-lg px-1 pb-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                   type="button"
                 >
-                  <div className="truncate text-sm font-semibold text-slate-900">{conv.title || "Untitled"}</div>
-                  <div className="truncate pt-1 text-xs text-slate-500">{conv.last_message ?? "No messages yet"}</div>
+                  <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{conv.title || "Untitled"}</div>
+                  <div className="truncate pt-1 text-xs text-slate-500 dark:text-slate-400">{conv.last_message ?? "No messages yet"}</div>
                 </button>
                 {renamingConversationId === conv.id ? (
                   <div className="mt-2 space-y-2">
@@ -390,7 +398,7 @@ export default function ChatPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => void onDeleteConversation(conv.id)}
+                      onClick={() => setConvToDelete(conv.id)}
                       className="btn-danger text-xs"
                     >
                       Delete
@@ -408,8 +416,8 @@ export default function ChatPage() {
         </aside>
 
         <section className="surface-card flex h-full flex-col overflow-hidden p-0">
-          <div className="flex-1 overflow-auto bg-slate-50 p-4">
-            <div className="space-y-3">
+          <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50 p-4">
+            <div className="space-y-3 mx-auto max-w-4xl">
               {messages.map((message) => (
                 <ChatMessage
                   key={message.id}
@@ -419,12 +427,21 @@ export default function ChatPage() {
               ))}
             </div>
           </div>
-          <div className="border-t border-slate-200 p-4">
-            <div className="space-y-3">
-              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <div className="border-t border-slate-200 dark:border-slate-800 p-4">
+            <div className="space-y-3 max-w-4xl mx-auto">
               {shareUrl ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  Shared URL: <span className="break-all font-medium">{shareUrl}</span>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-slate-700 dark:bg-brand-500/10 dark:border-brand-500/20 dark:text-brand-200">
+                  <span className="break-all font-medium truncate">{shareUrl}</span>
+                  <button
+                    onClick={() => {
+                      void navigator.clipboard.writeText(shareUrl);
+                      toast.success("URL copied");
+                    }}
+                    className="btn-primary !px-3 !py-1 flex items-center gap-1.5 shrink-0"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy
+                  </button>
                 </div>
               ) : null}
               {activeCitation ? (
@@ -475,6 +492,23 @@ export default function ChatPage() {
                   </div>
                 </div>
               ) : null}
+              {folders.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400">Search in:</span>
+                  <select
+                    value={selectedFolderId}
+                    onChange={(e) => setSelectedFolderId(e.target.value)}
+                    className="select-base !py-1.5 !text-xs"
+                  >
+                    <option value="">All folders</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.icon} {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-3">
                 <textarea
                   value={input}
@@ -482,6 +516,12 @@ export default function ChatPage() {
                   placeholder="Ask a question across your documents..."
                   rows={3}
                   className="input-base min-h-[96px] flex-1 resize-y"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      void onSend();
+                    }
+                  }}
                 />
                 <button
                   onClick={() => void onSend()}
@@ -496,6 +536,13 @@ export default function ChatPage() {
           </div>
         </section>
       </div>
+      <ConfirmModal
+        isOpen={Boolean(convToDelete)}
+        title="Delete Conversation"
+        message="Are you sure you want to delete this conversation? This will permanently remove all messages."
+        onConfirm={performDeleteConversation}
+        onCancel={() => setConvToDelete(null)}
+      />
     </AppShell>
   );
 }

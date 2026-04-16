@@ -10,8 +10,8 @@ export function CitationBadge({ citation, onClick, inlineIndex }: Props) {
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 font-medium text-brand-700 transition hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
-        inlineIndex !== undefined ? "px-1.5 py-0.5 text-[0.65rem] leading-none tracking-wide" : "px-2.5 py-1 text-xs"
+      className={`inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 font-bold text-brand-700 transition-all hover:bg-brand-100 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-brand-500/10 dark:border-brand-500/20 dark:text-brand-300 dark:hover:bg-brand-500/20 ${
+        inlineIndex !== undefined ? "px-1.5 py-0.5 text-[10px] leading-tight tracking-wider" : "px-3 py-1 text-[11px] uppercase tracking-wide"
       }`}
       type="button"
       title={inlineIndex !== undefined ? citation.doc_name : undefined}
@@ -19,7 +19,9 @@ export function CitationBadge({ citation, onClick, inlineIndex }: Props) {
       {inlineIndex !== undefined ? (
         `[${inlineIndex}]`
       ) : (
-        <>{citation.doc_name}{citation.page != null ? ` · p.${citation.page}` : ""}</>
+        <span className="truncate max-w-[140px]">
+          {citation.doc_name}{citation.page != null ? ` · P.${citation.page}` : ""}
+        </span>
       )}
     </button>
   );

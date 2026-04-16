@@ -1,10 +1,10 @@
 import type { Document } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
-  uploaded: "bg-slate-100 text-slate-700",
-  processing: "bg-yellow-100 text-yellow-700",
-  indexed: "bg-green-100 text-green-700",
-  error: "bg-red-100 text-red-700",
+  uploaded: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400",
+  processing: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  indexed: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  error: "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
 };
 
 interface Props {
@@ -29,7 +29,7 @@ export function DocumentCard({
   const summary = normalizeDocumentSummary(document.summary);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-soft">
+    <div className="surface-card p-5 group animate-in-fade">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
           {onSelect ? (
@@ -41,20 +41,20 @@ export function DocumentCard({
             />
           ) : null}
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-slate-900">{document.name}</h3>
-            <p className="text-xs text-slate-500">
+            <h3 className="truncate text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{document.name}</h3>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-500 mt-0.5">
               {document.user_role ?? "owner"} · {document.num_pages ?? 0} pages · {document.num_chunks ?? 0} chunks
             </p>
           </div>
         </div>
-        <span className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[document.status] ?? ""}`}>
+        <span className={`ml-2 shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[document.status] ?? ""}`}>
           {document.status}
         </span>
       </div>
-      {summary ? <p className="mt-2 line-clamp-2 text-sm text-slate-600">{summary}</p> : null}
-      <div className="mt-2 flex flex-wrap gap-1">
-        {document.key_topics?.map((t) => (
-          <span key={t} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+      {summary ? <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{summary}</p> : null}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {document.key_topics?.slice(0, 5).map((t) => (
+          <span key={t} className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-400 border dark:border-slate-700/50">
             {t}
           </span>
         ))}

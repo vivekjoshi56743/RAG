@@ -1,7 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import toast from "react-hot-toast";
 import { AppShell } from "@/components/AppShell";
 import { DocumentCard } from "@/components/DocumentCard";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { PromptModal } from "@/components/PromptModal";
 import { UploadZone } from "@/components/UploadZone";
 import {
   bulkMoveDocuments,
@@ -22,11 +26,16 @@ import type { AccessRole, Document, Folder, PermissionEntry } from "@/lib/types"
 
 export default function DocumentsPage() {
   const { user, loading, getIdToken } = useRequireAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeFolderId = searchParams.get("folderId");
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [docToDelete, setDocToDelete] = useState<Document | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
+  const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [selectedDocs, setSelectedDocs] = useState<Record<string, boolean>>({});
   const [bulkTargetFolder, setBulkTargetFolder] = useState<string>("");
   const [newFolderName, setNewFolderName] = useState("");
@@ -37,7 +46,6 @@ export default function DocumentsPage() {
 
   const loadData = useCallback(async () => {
     if (!user) return;
-    setError(null);
     try {
       const token = await getIdToken();
       if (!token) return;
@@ -45,7 +53,7 @@ export default function DocumentsPage() {
       setDocuments(docs);
       setFolders(folderRows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed loading documents");
+      toast.error(err instanceof Error ? err.message : "Failed loading documents");
     }
   }, [user, getIdToken]);
 
@@ -77,14 +85,14 @@ export default function DocumentsPage() {
 
   const onUpload = async (file: File) => {
     setBusy(true);
-    setError(null);
     try {
       const token = await getIdToken();
       if (!token) return;
       await uploadDocument(file, token);
       await loadData();
+      toast.success("Document uploaded successfully");
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Upload failed for ${file.name}`);
+      toast.error(err instanceof Error ? err.message : `Upload failed for ${file.name}`);
     } finally {
       setBusy(false);
     }
@@ -98,36 +106,66 @@ export default function DocumentsPage() {
       await createFolder({ name: newFolderName.trim() }, token);
       setNewFolderName("");
       await loadData();
+      toast.success("Folder created");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed creating folder");
+      toast.error(err instanceof Error ? err.message : "Failed creating folder");
     }
   };
 
-  const onRenameFolder = async (folder: Folder) => {
-    const nextName = window.prompt("Rename folder", folder.name);
-    if (!nextName || nextName === folder.name) return;
+  const openRenameFolder = (folder: Folder) => {
+    setFolderToRename(folder);
+    setRenameValue(folder.name);
+  };
+
+  const performRenameFolder = async () => {
+    if (!folderToRename || !renameValue.trim() || renameValue.trim() === folderToRename.name) {
+      setFolderToRename(null);
+      return;
+    }
     try {
       const token = await getIdToken();
       if (!token) return;
-      await updateFolder(folder.id, { name: nextName, color: folder.color, icon: folder.icon }, token);
+      await updateFolder(folderToRename.id, { name: renameValue.trim(), color: folderToRename.color, icon: folderToRename.icon }, token);
       await loadData();
+      toast.success("Folder renamed");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed renaming folder");
+      toast.error(err instanceof Error ? err.message : "Failed renaming folder");
+    } finally {
+      setFolderToRename(null);
+      setRenameValue("");
     }
   };
 
-  const onDeleteFolder = async (folder: Folder) => {
-    if (!window.confirm(`Delete folder "${folder.name}"?`)) return;
+  const performDeleteFolder = async () => {
+    if (!folderToDelete) return;
     try {
       const token = await getIdToken();
       if (!token) return;
-      await deleteFolder(folder.id, token);
-      if (activeFolderId === folder.id) {
-        setActiveFolderId(null);
+      await deleteFolder(folderToDelete.id, token);
+      if (activeFolderId === folderToDelete.id) {
+        router.push("/documents");
       }
       await loadData();
+      toast.success("Folder deleted");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed deleting folder");
+      toast.error(err instanceof Error ? err.message : "Failed deleting folder");
+    } finally {
+      setFolderToDelete(null);
+    }
+  };
+
+  const performDeleteDocument = async () => {
+    if (!docToDelete) return;
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await deleteDocument(docToDelete.id, token);
+      await loadData();
+      toast.success("Document deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed deleting document");
+    } finally {
+      setDocToDelete(null);
     }
   };
 
@@ -139,8 +177,9 @@ export default function DocumentsPage() {
       await bulkMoveDocuments(selectedDocumentIds, bulkTargetFolder || null, token);
       setSelectedDocs({});
       await loadData();
+      toast.success("Documents moved");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Bulk move failed");
+      toast.error(err instanceof Error ? err.message : "Bulk move failed");
     }
   };
 
@@ -153,7 +192,7 @@ export default function DocumentsPage() {
       const rows = await listDocumentPermissions(doc.id, token);
       setPermissions(rows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed loading permissions");
+      toast.error(err instanceof Error ? err.message : "Failed loading permissions");
     }
   };
 
@@ -166,8 +205,9 @@ export default function DocumentsPage() {
       setShareEmail("");
       const rows = await listDocumentPermissions(permissionsDoc.id, token);
       setPermissions(rows);
+      toast.success("Document shared");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed sharing document");
+      toast.error(err instanceof Error ? err.message : "Failed sharing document");
     }
   };
 
@@ -178,8 +218,9 @@ export default function DocumentsPage() {
       if (!token) return;
       await revokeDocumentPermission(permissionsDoc.id, permId, token);
       setPermissions((prev) => prev.filter((perm) => perm.id !== permId));
+      toast.success("Permission revoked");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed revoking permission");
+      toast.error(err instanceof Error ? err.message : "Failed revoking permission");
     }
   };
 
@@ -191,8 +232,6 @@ export default function DocumentsPage() {
     <AppShell
       title="Documents"
       folders={folders}
-      activeFolderId={activeFolderId}
-      onFolderClick={setActiveFolderId}
       actions={
         <button
           onClick={() => void loadData()}
@@ -206,12 +245,11 @@ export default function DocumentsPage() {
       <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
         <section className="h-full space-y-4 overflow-y-auto pr-1 pb-4">
           <UploadZone onUpload={onUpload} />
-          {busy ? <p className="text-sm text-slate-500">Uploading...</p> : null}
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {busy ? <p className="text-sm text-slate-500 animate-pulse">Uploading...</p> : null}
 
           <div className="surface-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">Document Library</h2>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Document Library</h2>
               <div className="flex items-center gap-2">
                 <select
                   value={bulkTargetFolder}
@@ -253,15 +291,7 @@ export default function DocumentsPage() {
                   }}
                   folderOptions={folders.map((folder) => ({ id: folder.id, name: folder.name }))}
                   onOpenPermissions={() => void onOpenPermissions(doc)}
-                  onDelete={() => {
-                    void (async () => {
-                      if (!window.confirm(`Delete "${doc.name}"?`)) return;
-                      const token = await getIdToken();
-                      if (!token) return;
-                      await deleteDocument(doc.id, token);
-                      await loadData();
-                    })();
-                  }}
+                  onDelete={() => setDocToDelete(doc)}
                 />
               ))}
               {!visibleDocuments.length ? (
@@ -273,7 +303,7 @@ export default function DocumentsPage() {
 
         <section className="h-full space-y-4 overflow-y-auto pr-1 pb-4">
           <div className="surface-card p-4">
-            <h2 className="text-lg font-semibold text-slate-900">Folders</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Folders</h2>
             <div className="mt-3 flex gap-2">
               <input
                 value={newFolderName}
@@ -287,16 +317,16 @@ export default function DocumentsPage() {
             </div>
             <div className="mt-3 space-y-2">
               {folders.map((folder) => (
-                <div key={folder.id} className="rounded-xl border border-slate-200 bg-white p-2 text-sm">
+                <div key={folder.id} className="rounded-xl border border-slate-200 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-800/60">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-slate-700">
+                    <span className="text-slate-700 dark:text-slate-300">
                       {folder.icon} {folder.name} ({folder.doc_count ?? 0})
                     </span>
                     <div className="flex gap-2">
-                      <button onClick={() => void onRenameFolder(folder)} className="btn-ghost !text-brand-700" type="button">
+                      <button onClick={() => openRenameFolder(folder)} className="btn-ghost !text-brand-700 dark:!text-brand-400" type="button">
                         Rename
                       </button>
-                      <button onClick={() => void onDeleteFolder(folder)} className="btn-ghost !text-red-600" type="button">
+                      <button onClick={() => setFolderToDelete(folder)} className="btn-ghost !text-red-600 dark:!text-red-400" type="button">
                         Delete
                       </button>
                     </div>
@@ -307,10 +337,10 @@ export default function DocumentsPage() {
           </div>
 
           <div className="surface-card p-4">
-            <h2 className="text-lg font-semibold text-slate-900">Document Permissions</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Document Permissions</h2>
             {permissionsDoc ? (
               <>
-                <p className="mt-1 text-sm text-slate-600">Managing: {permissionsDoc.name}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Managing: {permissionsDoc.name}</p>
                 <div className="mt-3 flex gap-2">
                   <input
                     value={shareEmail}
@@ -333,7 +363,7 @@ export default function DocumentsPage() {
                 </div>
                 <div className="mt-3 space-y-2">
                   {permissions.map((perm) => (
-                    <div key={perm.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-2 text-xs">
+                    <div key={perm.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 p-2 text-xs dark:text-slate-300">
                       <span>
                         {perm.email} · {perm.role}
                       </span>
@@ -345,11 +375,39 @@ export default function DocumentsPage() {
                 </div>
               </>
             ) : (
-              <p className="mt-2 text-sm text-slate-500">Choose a document and click Permissions.</p>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose a document and click Permissions.</p>
             )}
           </div>
         </section>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(docToDelete)}
+        title="Delete Document"
+        message={`Are you sure you want to delete "${docToDelete?.name}"? This action cannot be undone.`}
+        onConfirm={performDeleteDocument}
+        onCancel={() => setDocToDelete(null)}
+      />
+
+      <ConfirmModal
+        isOpen={Boolean(folderToDelete)}
+        title="Delete Folder"
+        message={`Are you sure you want to delete the folder "${folderToDelete?.name}"? Documents inside will be unfiled.`}
+        onConfirm={performDeleteFolder}
+        onCancel={() => setFolderToDelete(null)}
+      />
+
+      <PromptModal
+        isOpen={Boolean(folderToRename)}
+        title="Rename Folder"
+        message="Enter a new name for this folder."
+        value={renameValue}
+        placeholder={folderToRename?.name ?? "Folder name"}
+        confirmText="Rename"
+        onChange={setRenameValue}
+        onConfirm={() => void performRenameFolder()}
+        onCancel={() => { setFolderToRename(null); setRenameValue(""); }}
+      />
     </AppShell>
   );
 }

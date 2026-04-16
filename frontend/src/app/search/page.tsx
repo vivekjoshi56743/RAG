@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import { AppShell } from "@/components/AppShell";
 import { MarkdownViewer } from "@/components/MarkdownViewer";
 import { SearchResultItem } from "@/components/SearchResult";
@@ -32,7 +33,6 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
   const [viewerText, setViewerText] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
@@ -58,7 +58,6 @@ export default function SearchPage() {
     }
     void (async () => {
       setSearching(true);
-      setError(null);
       try {
         const token = await getIdToken();
         if (!token) return;
@@ -82,7 +81,7 @@ export default function SearchPage() {
         });
         setResults(normalized);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Search failed");
+        toast.error(err instanceof Error ? err.message : "Search failed");
       } finally {
         setSearching(false);
       }
@@ -147,16 +146,15 @@ export default function SearchPage() {
             <input
               type="number"
               min={1}
-              max={100}
+              max={20}
               value={limit}
-              onChange={(e) => setLimit(Number(e.target.value) || 20)}
+              onChange={(e) => setLimit(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
               className="input-base"
             />
           </div>
-          <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
+          <div className="mt-3 flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
             <span>{resultCountLabel}</span>
           </div>
-          {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
 
           <div className="mt-3 space-y-3">
             {results.map((result, idx) => (

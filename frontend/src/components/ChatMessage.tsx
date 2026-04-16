@@ -11,12 +11,12 @@ export function ChatMessage({ message, onCitationClick }: Props) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"} animate-in-fade`}>
       <div
-        className={`max-w-3xl rounded-2xl p-4 shadow-sm ${
+        className={`max-w-[85%] sm:max-w-2xl lg:max-w-3xl rounded-2xl p-4 shadow-sm transition-all duration-300 ${
           isUser
-            ? "bg-brand-600 text-white"
-            : "border border-slate-200 bg-white text-slate-900"
+            ? "bg-gradient-to-br from-brand-600 to-indigo-600 text-white shadow-brand-500/20"
+            : "border border-slate-200 bg-white/70 backdrop-blur-sm text-slate-900 dark:bg-slate-900/40 dark:border-slate-800 dark:text-slate-100 dark:shadow-none"
         }`}
       >
         {isUser ? (
@@ -35,7 +35,7 @@ export function ChatMessage({ message, onCitationClick }: Props) {
           if (unreferencedCitations.length === 0) return null;
 
           return (
-            <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+            <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-slate-100 dark:border-slate-800/50">
               {unreferencedCitations.map((c, i) => (
                 <CitationBadge
                   key={`${c.chunk_id}-${i}`}
