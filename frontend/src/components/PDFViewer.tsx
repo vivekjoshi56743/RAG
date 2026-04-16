@@ -26,12 +26,16 @@ export function PDFViewer({ url, initialPage = 1, highlightText, textPreview, vi
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 border-b p-2 text-sm">
-        <button onClick={() => setPage((p) => Math.max(1, p - 1))}>←</button>
-        <span>Page {page}</span>
-        <button onClick={() => setPage((p) => p + 1)}>→</button>
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white p-3 text-sm">
+        <button onClick={() => setPage((p) => Math.max(1, p - 1))} className="btn-ghost" type="button">
+          Previous
+        </button>
+        <span className="text-sm font-medium text-slate-700">Page {page}</span>
+        <button onClick={() => setPage((p) => p + 1)} className="btn-ghost" type="button">
+          Next
+        </button>
       </div>
-      <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-100">
         {canRenderPdf ? (
           <iframe
             title="Document preview"
@@ -40,7 +44,7 @@ export function PDFViewer({ url, initialPage = 1, highlightText, textPreview, vi
           />
         ) : (
           <div className="max-w-2xl p-4 text-sm text-slate-700">
-            <p className="font-medium mb-2">Viewer source</p>
+            <p className="mb-2 font-semibold text-slate-900">Viewer source</p>
             <p className="break-all text-xs text-slate-500">{url || "No file URL available"}</p>
             {viewerKind === "pdf" && !isHttpUrl ? (
               <p className="mt-2 text-xs text-amber-700">
@@ -49,13 +53,15 @@ export function PDFViewer({ url, initialPage = 1, highlightText, textPreview, vi
             ) : null}
             {showTextPreview ? (
               <>
-                <p className="font-medium mt-4 mb-1">Text preview</p>
-                <pre className="rounded border bg-white p-3 whitespace-pre-wrap break-words">{previewText}</pre>
+                <p className="mb-1 mt-4 font-semibold text-slate-900">Text preview</p>
+                <pre className="whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-white p-3">
+                  {previewText}
+                </pre>
               </>
             ) : highlightText ? (
               <>
-                <p className="font-medium mt-4 mb-1">Highlighted context</p>
-                <p className="rounded border bg-white p-3">{highlightText}</p>
+                <p className="mb-1 mt-4 font-semibold text-slate-900">Highlighted context</p>
+                <p className="rounded-xl border border-slate-200 bg-white p-3">{highlightText}</p>
               </>
             ) : null}
           </div>

@@ -131,19 +131,19 @@ export default function SearchPage() {
 
   return (
     <AppShell title="Semantic Search" folders={folders}>
-      <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_1fr] gap-4 h-[calc(100vh-140px)]">
-        <section className="rounded-xl border bg-white p-4 overflow-auto">
+      <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[1.25fr_1fr]">
+        <section className="surface-card min-h-[580px] overflow-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Ask naturally, e.g. what are the payment terms?"
-              className="md:col-span-2 rounded border px-3 py-2 text-sm"
+              className="input-base md:col-span-2"
             />
             <select
               value={selectedDocumentId}
               onChange={(e) => setSelectedDocumentId(e.target.value)}
-              className="rounded border px-3 py-2 text-sm"
+              className="select-base"
             >
               <option value="">All documents</option>
               {documents.map((doc) => (
@@ -155,7 +155,7 @@ export default function SearchPage() {
             <select
               value={selectedFolderId}
               onChange={(e) => setSelectedFolderId(e.target.value)}
-              className="rounded border px-3 py-2 text-sm"
+              className="select-base"
             >
               <option value="">All folders</option>
               {folders.map((folder) => (
@@ -168,7 +168,7 @@ export default function SearchPage() {
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="Tags (comma separated)"
-              className="rounded border px-3 py-2 text-sm"
+              className="input-base"
             />
             <input
               type="number"
@@ -176,7 +176,7 @@ export default function SearchPage() {
               max={100}
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value) || 20)}
-              className="rounded border px-3 py-2 text-sm"
+              className="input-base"
             />
           </div>
           <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
@@ -191,7 +191,7 @@ export default function SearchPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border bg-white overflow-hidden">
+        <section className="surface-card min-h-[580px] overflow-hidden p-0">
           {selectedResult ? (
             <PDFViewer
               url={viewerDocPath}
@@ -201,7 +201,7 @@ export default function SearchPage() {
               textPreview={viewerText}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-sm text-slate-500">
+            <div className="flex h-full items-center justify-center text-sm text-slate-500">
               Select a result to view source context.
             </div>
           )}

@@ -9,21 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "firebase": "^10",
     "next": "^14",
     "react": "^18",
     "react-dom": "^18",
-    "firebase": "^10",
-    "react-pdf": "^7"
+    "react-markdown": "^10.1.0",
+    "react-pdf": "^7",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5",
-    "tailwindcss": "^3",
     "autoprefixer": "^10",
-    "postcss": "^8",
     "eslint": "^8",
-    "eslint-config-next": "^14"
+    "eslint-config-next": "^14",
+    "postcss": "^8",
+    "tailwindcss": "^3",
+    "typescript": "^5"
   }
 }

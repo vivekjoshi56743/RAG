@@ -68,6 +68,7 @@ class FakeState:
     conversations: list[dict[str, Any]] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
     shared_threads: list[dict[str, Any]] = field(default_factory=list)
+    stream_is_enumeration: bool | None = None
 
     def __post_init__(self) -> None:
         self.documents = [
@@ -434,9 +435,11 @@ def client_and_state(monkeypatch):
                 }
             ],
             [{"role": "user", "content": "hello"}],
+            True,
         )
 
-    async def fake_stream_response(_messages):
+    async def fake_stream_response(_messages, is_enumeration: bool = False):
+        state.stream_is_enumeration = is_enumeration
         yield "Test token response."
 
     async def fake_persist(*_args, **_kwargs):

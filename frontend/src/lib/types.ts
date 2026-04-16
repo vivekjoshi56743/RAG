@@ -130,5 +130,5 @@ export interface SharedThreadResponse {
 
 export type ChatStreamEvent =
   | { type: "token"; text: string }
-  | { type: "done"; citations: Citation[] }
+  | { type: "done"; citations: Citation[]; title?: string }
   | { type: "error"; message: string };

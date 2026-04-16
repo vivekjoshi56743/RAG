@@ -8,6 +8,7 @@ import {
   getConversation,
   listConversations,
   listFolders,
+  renameConversation,
   shareConversation,
   streamConversationMessage,
 } from "@/lib/api";
@@ -38,6 +39,10 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const activeConversation = useMemo(
@@ -120,9 +125,61 @@ export default function ChatPage() {
     }
   };
 
+  const startRenameConversation = (conversation: Conversation) => {
+    setRenamingConversationId(conversation.id);
+    setRenameValue(conversation.title || "");
+    setError(null);
+  };
+
+  const cancelRenameConversation = () => {
+    setRenamingConversationId(null);
+    setRenameValue("");
+    setRenaming(false);
+  };
+
+  const submitRenameConversation = async (conversationId: string) => {
+    const title = renameValue.trim();
+    if (!title) {
+      setError("Conversation title cannot be empty");
+      return;
+    }
+
+    try {
+      setRenaming(true);
+      const token = await getIdToken();
+      if (!token) return;
+      const updated = await renameConversation(conversationId, title, token);
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                title: updated.title,
+                updated_at: updated.updated_at ?? conv.updated_at,
+                last_message: updated.last_message ?? conv.last_message,
+                last_message_at: updated.last_message_at ?? conv.last_message_at,
+              }
+            : conv,
+        ),
+      );
+      cancelRenameConversation();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed renaming conversation");
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   const onSend = async () => {
     if (!input.trim() || !activeConversationId || sending) return;
     const content = input.trim();
+    const priorUserCount = messages.filter((m) => m.role === "user").length;
+    const priorAssistantCount = messages.filter((m) => m.role === "assistant").length;
+    const shouldAttemptFallbackTitle =
+      (activeConversation?.title || "").trim() === "New Chat" &&
+      priorUserCount === 0 &&
+      priorAssistantCount === 0;
+
     setInput("");
     setSending(true);
     setError(null);
@@ -167,6 +224,31 @@ export default function ChatPage() {
               msg.id === assistantMessageId ? { ...msg, citations: event.citations ?? [] } : msg,
             ),
           );
+          if (event.title?.trim()) {
+            const sseTitle = event.title.trim();
+            setConversations((prev) =>
+              prev.map((conv) => (conv.id === activeConversationId ? { ...conv, title: sseTitle } : conv)),
+            );
+          } else if (shouldAttemptFallbackTitle) {
+            // Fallback: persist a deterministic title when auto-title payload is missing.
+            // This avoids chats getting stuck as "New Chat" in degraded model/API scenarios.
+            const token = await getIdToken();
+            if (token) {
+              const fallbackTitle = deriveTitleFromPrompt(content);
+              const updated = await renameConversation(activeConversationId, fallbackTitle, token);
+              setConversations((prev) =>
+                prev.map((conv) =>
+                  conv.id === activeConversationId
+                    ? {
+                        ...conv,
+                        title: updated.title,
+                        updated_at: updated.updated_at ?? conv.updated_at,
+                      }
+                    : conv,
+                ),
+              );
+            }
+          }
         } else if (event.type === "error") {
           setError(event.message || "Assistant stream failed");
         }
@@ -212,81 +294,201 @@ export default function ChatPage() {
       onFolderClick={(folderId) => setSelectedFolderId(folderId ?? "")}
       actions={
         <div className="flex gap-2">
-          <button onClick={() => void onCreateConversation()} className="rounded bg-blue-600 text-white px-3 py-2 text-sm">
+          <button onClick={() => void onCreateConversation()} className="btn-primary" type="button">
             New Chat
           </button>
           <button
             onClick={() => void onShareConversation()}
             disabled={!activeConversation}
-            className="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 disabled:opacity-50"
+            className="btn-secondary"
+            type="button"
           >
             Share
           </button>
         </div>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 h-[calc(100vh-140px)]">
-        <aside className="rounded-xl border bg-white p-3 overflow-auto">
-          <h2 className="text-sm font-semibold mb-2">Conversations</h2>
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
+        <aside className="surface-card min-h-[580px] p-3">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Conversations</h2>
           <div className="space-y-2">
             {conversations.map((conv) => (
-              <button
+              <div
                 key={conv.id}
-                onClick={() => setActiveConversationId(conv.id)}
-                className={`w-full rounded border px-3 py-2 text-left text-sm ${
-                  conv.id === activeConversationId ? "bg-blue-50 border-blue-200" : "hover:bg-slate-50"
+                className={`rounded-xl border p-2 transition ${
+                  conv.id === activeConversationId
+                    ? "border-brand-300 bg-brand-50 shadow-sm"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                <div className="font-medium truncate">{conv.title || "Untitled"}</div>
-                <div className="text-xs text-slate-500 truncate">{conv.last_message ?? "No messages yet"}</div>
-                <div className="mt-1 flex justify-end">
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void onDeleteConversation(conv.id);
-                    }}
-                    className="text-red-600 text-xs"
-                  >
-                    Delete
-                  </span>
-                </div>
-              </button>
+                <button
+                  onClick={() => setActiveConversationId(conv.id)}
+                  className="w-full rounded-lg px-1 pb-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  type="button"
+                >
+                  <div className="truncate text-sm font-semibold text-slate-900">{conv.title || "Untitled"}</div>
+                  <div className="truncate pt-1 text-xs text-slate-500">{conv.last_message ?? "No messages yet"}</div>
+                </button>
+                {renamingConversationId === conv.id ? (
+                  <div className="mt-2 space-y-2">
+                    <input
+                      value={renameValue}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void submitRenameConversation(conv.id);
+                        } else if (event.key === "Escape") {
+                          cancelRenameConversation();
+                        }
+                      }}
+                      className="input-base w-full"
+                      placeholder="Conversation title"
+                      maxLength={120}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={cancelRenameConversation}
+                        className="btn-ghost"
+                        disabled={renaming}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void submitRenameConversation(conv.id)}
+                        className="btn-secondary"
+                        disabled={renaming || !renameValue.trim()}
+                      >
+                        {renaming ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startRenameConversation(conv)}
+                      className="btn-ghost text-xs"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void onDeleteConversation(conv.id)}
+                      className="btn-danger text-xs"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </aside>
 
-        <section className="rounded-xl border bg-white flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50">
-            {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
-            ))}
+        <section className="surface-card flex min-h-[580px] flex-col overflow-hidden p-0">
+          <div className="flex-1 overflow-auto bg-slate-50 p-4">
+            <div className="space-y-3">
+              {messages.map((message) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  onCitationClick={(citation) => setActiveCitation(citation)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="border-t p-3 space-y-2">
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            {shareUrl ? (
-              <div className="rounded border bg-slate-50 p-2 text-sm">
-                Shared URL: <span className="break-all">{shareUrl}</span>
+          <div className="border-t border-slate-200 p-4">
+            <div className="space-y-3">
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              {shareUrl ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  Shared URL: <span className="break-all font-medium">{shareUrl}</span>
+                </div>
+              ) : null}
+              {activeCitation ? (
+                <div className="rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-slate-700">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        Source: {activeCitation.doc_name} · p.{activeCitation.page ?? "-"}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-700">
+                        {activeCitation.snippet || "No snippet available for this citation."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveCitation(null)}
+                      className="btn-ghost !px-2 !py-1 !text-xs"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary !px-2 !py-1 !text-xs"
+                      onClick={() => {
+                        if (!activeCitation.snippet) return;
+                        setInput((prev) =>
+                          prev.trim()
+                            ? `${prev.trim()}\n\nUse this source context:\n${activeCitation.snippet}`
+                            : `Use this source context:\n${activeCitation.snippet}`,
+                        );
+                      }}
+                    >
+                      Use In Prompt
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary !px-2 !py-1 !text-xs"
+                      onClick={() => {
+                        if (!activeCitation.snippet) return;
+                        void navigator.clipboard.writeText(activeCitation.snippet);
+                      }}
+                    >
+                      Copy Snippet
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="flex gap-3">
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask a question across your documents..."
+                  rows={3}
+                  className="input-base min-h-[96px] flex-1 resize-y"
+                />
+                <button
+                  onClick={() => void onSend()}
+                  disabled={sending || !input.trim()}
+                  className="btn-primary self-end"
+                  type="button"
+                >
+                  {sending ? "Streaming..." : "Send"}
+                </button>
               </div>
-            ) : null}
-            <div className="flex gap-2">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask a question across your documents..."
-                rows={3}
-                className="flex-1 rounded border px-3 py-2 text-sm"
-              />
-              <button
-                onClick={() => void onSend()}
-                disabled={sending || !input.trim()}
-                className="rounded bg-slate-900 text-white px-4 py-2 text-sm disabled:opacity-50 self-end"
-              >
-                {sending ? "Streaming..." : "Send"}
-              </button>
             </div>
           </div>
         </section>
       </div>
     </AppShell>
   );
+}
+
+function deriveTitleFromPrompt(prompt: string): string {
+  const cleaned = prompt
+    .replace(/[^\w\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "New Chat";
+  const words = cleaned.split(" ").slice(0, 6);
+  const titled = words
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+  return titled.slice(0, 120);
 }

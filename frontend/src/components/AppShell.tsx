@@ -18,29 +18,29 @@ export function AppShell({ title, folders, activeFolderId, onFolderClick, action
   const { user, signOut } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="flex min-h-screen bg-slate-100">
       <Sidebar
         folders={folders}
         activeFolderId={activeFolderId ?? undefined}
         onFolderClick={onFolderClick}
       />
-      <main className="flex-1 p-6">
-        <header className="mb-4 flex items-center justify-between gap-4">
+      <main className="flex min-h-screen flex-1 flex-col p-5 lg:p-6">
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
-            <p className="text-sm text-slate-600">{user?.email}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+            <p className="mt-1 text-sm text-slate-600">{user?.email}</p>
           </div>
           <div className="flex items-center gap-2">
             {actions}
             <button
               onClick={() => void signOut()}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100"
+              className="btn-secondary"
             >
               Sign out
             </button>
           </div>
         </header>
-        {children}
+        <div className="min-h-0 flex-1">{children}</div>
       </main>
     </div>
   );

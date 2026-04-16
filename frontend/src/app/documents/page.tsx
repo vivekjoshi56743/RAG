@@ -196,26 +196,27 @@ export default function DocumentsPage() {
       actions={
         <button
           onClick={() => void loadData()}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100"
+          className="btn-secondary"
+          type="button"
         >
           Refresh
         </button>
       }
     >
-      <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
         <section className="space-y-4">
           <UploadZone onUpload={onUpload} />
           {busy ? <p className="text-sm text-slate-500">Uploading...</p> : null}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-          <div className="rounded-xl border bg-white p-4">
+          <div className="surface-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-semibold">Document Library</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Document Library</h2>
               <div className="flex items-center gap-2">
                 <select
                   value={bulkTargetFolder}
                   onChange={(e) => setBulkTargetFolder(e.target.value)}
-                  className="rounded border px-2 py-1 text-sm"
+                  className="select-base"
                 >
                   <option value="">Move selected to Unfiled</option>
                   {folders.map((folder) => (
@@ -227,7 +228,8 @@ export default function DocumentsPage() {
                 <button
                   onClick={onBulkMove}
                   disabled={!selectedDocumentIds.length}
-                  className="rounded bg-slate-900 text-white px-3 py-1.5 text-sm disabled:opacity-50"
+                  className="btn-primary"
+                  type="button"
                 >
                   Bulk Move ({selectedDocumentIds.length})
                 </button>
@@ -270,31 +272,31 @@ export default function DocumentsPage() {
         </section>
 
         <section className="space-y-4">
-          <div className="rounded-xl border bg-white p-4">
-            <h2 className="font-semibold">Folders</h2>
+          <div className="surface-card p-4">
+            <h2 className="text-lg font-semibold text-slate-900">Folders</h2>
             <div className="mt-3 flex gap-2">
               <input
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="New folder name"
-                className="flex-1 rounded border px-3 py-2 text-sm"
+                className="input-base flex-1"
               />
-              <button onClick={onCreateFolder} className="rounded bg-blue-600 text-white px-3 py-2 text-sm">
+              <button onClick={onCreateFolder} className="btn-primary" type="button">
                 Add
               </button>
             </div>
             <div className="mt-3 space-y-2">
               {folders.map((folder) => (
-                <div key={folder.id} className="rounded border p-2 text-sm">
+                <div key={folder.id} className="rounded-xl border border-slate-200 bg-white p-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span>
+                    <span className="text-slate-700">
                       {folder.icon} {folder.name} ({folder.doc_count ?? 0})
                     </span>
                     <div className="flex gap-2">
-                      <button onClick={() => void onRenameFolder(folder)} className="text-blue-600">
+                      <button onClick={() => void onRenameFolder(folder)} className="btn-ghost !text-brand-700" type="button">
                         Rename
                       </button>
-                      <button onClick={() => void onDeleteFolder(folder)} className="text-red-600">
+                      <button onClick={() => void onDeleteFolder(folder)} className="btn-ghost !text-red-600" type="button">
                         Delete
                       </button>
                     </div>
@@ -304,8 +306,8 @@ export default function DocumentsPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border bg-white p-4">
-            <h2 className="font-semibold">Document Permissions</h2>
+          <div className="surface-card p-4">
+            <h2 className="text-lg font-semibold text-slate-900">Document Permissions</h2>
             {permissionsDoc ? (
               <>
                 <p className="mt-1 text-sm text-slate-600">Managing: {permissionsDoc.name}</p>
@@ -314,28 +316,28 @@ export default function DocumentsPage() {
                     value={shareEmail}
                     onChange={(e) => setShareEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="flex-1 rounded border px-3 py-2 text-sm"
+                    className="input-base flex-1"
                   />
                   <select
                     value={shareRole}
                     onChange={(e) => setShareRole(e.target.value as Exclude<AccessRole, "owner">)}
-                    className="rounded border px-2 py-2 text-sm"
+                    className="select-base"
                   >
                     <option value="viewer">viewer</option>
                     <option value="editor">editor</option>
                     <option value="admin">admin</option>
                   </select>
-                  <button onClick={onShareDocument} className="rounded bg-slate-900 text-white px-3 py-2 text-sm">
+                  <button onClick={onShareDocument} className="btn-primary" type="button">
                     Share
                   </button>
                 </div>
                 <div className="mt-3 space-y-2">
                   {permissions.map((perm) => (
-                    <div key={perm.id} className="rounded border p-2 text-xs flex items-center justify-between">
+                    <div key={perm.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-2 text-xs">
                       <span>
                         {perm.email} · {perm.role}
                       </span>
-                      <button onClick={() => void onRevoke(perm.id)} className="text-red-600">
+                      <button onClick={() => void onRevoke(perm.id)} className="btn-ghost !text-red-600" type="button">
                         Revoke
                       </button>
                     </div>

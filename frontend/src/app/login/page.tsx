@@ -29,17 +29,18 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <section className="w-full max-w-md bg-white border rounded-2xl shadow-sm p-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Sign in to RAG Engine</h1>
-        <p className="text-sm text-slate-600 mt-1">
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+      <section className="surface-card w-full max-w-md p-7">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Sign in to RAG Engine</h1>
+        <p className="mt-1 text-sm text-slate-600">
           Use your Google account to access documents, search, and chat.
         </p>
 
         <button
           onClick={onSignIn}
           disabled={loading || submitting}
-          className="mt-6 w-full rounded-lg bg-blue-600 text-white px-4 py-2.5 hover:bg-blue-700 disabled:opacity-50"
+          className="btn-primary mt-6 w-full"
+          type="button"
         >
           {submitting ? "Signing in..." : "Continue with Google"}
         </button>

@@ -33,6 +33,15 @@ def _sanitize_title(raw: str) -> str:
     return title[:MAX_TITLE_LEN]
 
 
+def _fallback_title_from_user_message(first_user_msg: str) -> str:
+    cleaned = " ".join((first_user_msg or "").split())
+    if not cleaned:
+        return ""
+    words = cleaned.split(" ")[:6]
+    titled = " ".join(w.capitalize() for w in words)
+    return _sanitize_title(titled)
+
+
 async def _generate_title(first_user_msg: str, first_assistant_msg: str) -> str:
     prompt = (
         "You are naming a chat thread. Summarize the exchange below as a short "
@@ -52,6 +61,7 @@ async def _generate_title(first_user_msg: str, first_assistant_msg: str) -> str:
 
 async def maybe_autotitle_conversation(
     conv_id: UUID,
+    owner_id: UUID,
     first_user_msg: str,
     first_assistant_msg: str,
 ) -> str | None:
@@ -64,8 +74,8 @@ async def maybe_autotitle_conversation(
         async with AsyncSessionLocal() as db:
             row = (
                 await db.execute(
-                    text("SELECT title FROM conversations WHERE id = :id"),
-                    {"id": str(conv_id)},
+                    text("SELECT title FROM conversations WHERE id = :id AND user_id = :uid"),
+                    {"id": str(conv_id), "uid": str(owner_id)},
                 )
             ).mappings().first()
             if not row or (row["title"] or "").strip() != "New Chat":
@@ -73,14 +83,30 @@ async def maybe_autotitle_conversation(
 
             title = await _generate_title(first_user_msg, first_assistant_msg)
             if not title:
+                title = _fallback_title_from_user_message(first_user_msg)
+            if not title:
                 return None
 
-            await db.execute(
-                text("UPDATE conversations SET title = :title, updated_at = now() WHERE id = :id"),
-                {"id": str(conv_id), "title": title},
-            )
+            updated = (
+                await db.execute(
+                    text(
+                        """
+                        UPDATE conversations
+                        SET title = :title, updated_at = now()
+                        WHERE id = :id
+                          AND user_id = :uid
+                          AND btrim(title) = 'New Chat'
+                        RETURNING title
+                        """
+                    ),
+                    {"id": str(conv_id), "uid": str(owner_id), "title": title},
+                )
+            ).mappings().first()
+            if not updated:
+                return None
+
             await db.commit()
-            return title
+            return updated["title"]
     except Exception:
         logger.exception("Auto-title failed for conversation %s", conv_id)
         return None

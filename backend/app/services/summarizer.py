@@ -71,11 +71,21 @@ def _strip_json_fences(raw: str) -> str:
 
 
 def _parse_summary_json(raw: str) -> dict:
+    cleaned = _strip_json_fences(raw)
     try:
-        data = json.loads(_strip_json_fences(raw))
+        data = json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.warning("Summarizer JSON parse failed; using fallback")
-        return _default_fallback(raw)
+        # Some models prepend/append text while still including a JSON object.
+        match = re.search(r"\{[\s\S]*\}", cleaned)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                logger.warning("Summarizer JSON parse failed; using fallback")
+                return _default_fallback(raw)
+        else:
+            logger.warning("Summarizer JSON parse failed; using fallback")
+            return _default_fallback(raw)
     if not isinstance(data, dict):
         return _default_fallback(raw)
     # Normalize — tolerate missing keys.

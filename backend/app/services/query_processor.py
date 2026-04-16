@@ -3,6 +3,8 @@ Stage 1 of the 4-stage retrieval funnel: Query Understanding.
 
 - Resolves pronouns / coreferences in follow-up queries ("it", "that")
 - Decomposes comparison queries ("compare X vs Y") into sub-queries
+- Detects enumeration queries ("list all characters", "what are all X") so
+  the retrieval stage can widen its net
 - Embeds the (rewritten) query for retrieval
 """
 import re
@@ -13,6 +15,23 @@ from app.services.llm_provider import complete_text
 def _has_references(query: str) -> bool:
     """Detect pronouns and demonstratives that suggest a follow-up query."""
     return bool(re.search(r'\b(it|its|they|them|that|this|those|these|the same|the above)\b', query, re.I))
+
+
+def _is_enumeration_query(query: str) -> bool:
+    """
+    Detect queries that ask to enumerate *all* items of a type across a
+    document — characters, events, themes, locations, people, etc.
+
+    These queries require wider retrieval because the answers are spread
+    across many different chunks, not concentrated in a few.
+    """
+    return bool(re.search(
+        r'\b(all|every|each|complete list of|full list of|list (all|every)|'
+        r'list (the )?characters|list (the )?people|who are (all|the) (the )?characters|'
+        r'who are (the )?characters|what are all|name all|enumerate|'
+        r'how many .* (are|were|is|was) there|tell me all)\b',
+        query, re.I,
+    ))
 
 
 async def _rewrite_query(query: str, history: list[dict]) -> str:
@@ -47,9 +66,10 @@ async def _decompose_query(query: str) -> list[str]:
 async def process_query(raw_query: str, conversation_history: list[dict]) -> dict:
     """
     Returns:
-        rewritten:   self-contained query string
-        sub_queries: list of atomic search queries
-        embedding:   retrieval embedding for the rewritten query
+        rewritten:        self-contained query string
+        sub_queries:      list of atomic search queries
+        embedding:        retrieval embedding for the rewritten query
+        is_enumeration:   True when the query asks to list ALL items of a type
     """
     rewritten = raw_query
 
@@ -58,9 +78,11 @@ async def process_query(raw_query: str, conversation_history: list[dict]) -> dic
 
     sub_queries = await _decompose_query(rewritten)
     embedding = await embed_query(rewritten)
+    is_enumeration = _is_enumeration_query(rewritten)
 
     return {
         "rewritten": rewritten,
         "sub_queries": sub_queries,
         "embedding": embedding,
+        "is_enumeration": is_enumeration,
     }

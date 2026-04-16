@@ -19,21 +19,68 @@ build/
 dist/
 *.egg-info/
 .eggs/
+jars/
+*.egg
+*.whl
 
 # Tooling caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .cache/
+.tox/
+.coverage
+htmlcov/
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.mo
+*.pot
 
 # Jupyter
 .ipynb_checkpoints/
+*.ipynb
 
 # Logs and runtime files
 *.log
 *.pid
+celerybeat-schedule
+celerybeat.pid
 
 # OS/editor files
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+*.mysql
+
+# Node.js / Frontend
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+.npm/
+
+# Frontend Frameworks (Next.js, Vite, Nuxt)
+.next/
+**/.next/
+out/
+.nuxt/
+.vite/

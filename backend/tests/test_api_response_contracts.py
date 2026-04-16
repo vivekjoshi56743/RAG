@@ -137,6 +137,7 @@ def test_search_chat_shared_and_feedback_contracts(client_and_state):
     assert "text/event-stream" in streamed.headers.get("content-type", "")
     assert '"type": "token"' in streamed.text
     assert '"type": "done"' in streamed.text
+    assert state.stream_is_enumeration is True
 
     invalid_message = client.post(f"/api/conversations/{state.conversation_id}/messages", json={"content": "   "})
     assert invalid_message.status_code == 400
@@ -187,3 +188,24 @@ def test_search_chat_shared_and_feedback_contracts(client_and_state):
     deleted = client.delete(f"/api/conversations/{state.conversation_id}")
     assert deleted.status_code == 200
     assert deleted.json()["deleted"] is True
+
+
+def test_first_exchange_auto_title_in_done_event(client_and_state, monkeypatch):
+    client, state = client_and_state
+    state.messages = []
+    state.conversations[0]["title"] = "New Chat"
+
+    from app.routers import chat
+
+    async def fake_autotitle(_conv_id, _owner_id, _first_user_msg, _first_assistant_msg):
+        return "Gulliver Character List"
+
+    monkeypatch.setattr(chat, "maybe_autotitle_conversation", fake_autotitle)
+
+    streamed = client.post(
+        f"/api/conversations/{state.conversation_id}/messages",
+        json={"content": "who are all the characters in this novel?"},
+    )
+    assert streamed.status_code == 200
+    assert '"type": "done"' in streamed.text
+    assert '"title": "Gulliver Character List"' in streamed.text

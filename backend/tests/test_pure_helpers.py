@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from app.services.conversation_titler import _sanitize_title
 from app.services.parsers.pdf_parser import clean_ocr_text
+from app.services.query_processor import _is_enumeration_query
 from app.services.rag import _format_source_header
 
 
@@ -64,3 +65,13 @@ def test_format_source_header_ocr_tag():
 def test_format_source_header_minimal():
     # Should still work when only the index is known.
     assert _format_source_header(2, {}) == "[Source 2]"
+
+
+def test_enumeration_query_detection_variants():
+    assert _is_enumeration_query("Who are all the characters in this novel?")
+    assert _is_enumeration_query("List the characters and their roles.")
+    assert _is_enumeration_query("Name all people mentioned in this chapter.")
+
+
+def test_non_enumeration_query_detection():
+    assert not _is_enumeration_query("What is the main conflict in this story?")

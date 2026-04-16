@@ -1,4 +1,5 @@
 import type { SharedThreadResponse } from "@/lib/types";
+import { ChatMessage } from "@/components/ChatMessage";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -28,8 +29,8 @@ export default async function SharedThreadPage({ params }: { params: { token: st
 
   if (!data) {
     return (
-      <main className="min-h-screen p-6 bg-slate-50">
-        <section className="mx-auto max-w-3xl rounded-xl border bg-white p-6">
+      <main className="min-h-screen bg-slate-100 p-6">
+        <section className="surface-card mx-auto max-w-3xl p-6">
           <h1 className="text-xl font-semibold">Shared thread unavailable</h1>
           <p className="mt-2 text-sm text-slate-600">This link may be revoked or expired.</p>
         </section>
@@ -38,29 +39,16 @@ export default async function SharedThreadPage({ params }: { params: { token: st
   }
 
   return (
-    <main className="min-h-screen p-6 bg-slate-50">
-      <section className="mx-auto max-w-4xl rounded-xl border bg-white p-6">
-        <h1 className="text-xl font-semibold">{data.title}</h1>
-        <p className="text-xs text-slate-500 mt-1">Views: {data.view_count}</p>
+    <main className="min-h-screen bg-slate-100 p-6">
+      <section className="surface-card mx-auto max-w-4xl p-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{data.title}</h1>
+        <p className="mt-1 text-xs text-slate-500">Views: {data.view_count}</p>
         <div className="mt-4 space-y-3">
           {data.messages.map((message, idx) => (
-            <div
+            <ChatMessage
               key={`${message.id ?? idx}-${idx}`}
-              className={`rounded-lg p-3 ${
-                message.role === "user" ? "bg-blue-600 text-white ml-8" : "bg-slate-100 text-slate-900 mr-8"
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{message.content}</p>
-              {getCitations(message.citations).length ? (
-                <div className="mt-2 text-xs">
-                  {getCitations(message.citations).map((citation, citationIdx) => (
-                    <span key={`${citation.chunk_id}-${citationIdx}`} className="mr-2">
-                      {citation.doc_name} p.{citation.page ?? "-"}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+              message={{ ...message, citations: getCitations(message.citations) }}
+            />
           ))}
         </div>
       </section>

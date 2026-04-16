@@ -1,3 +1,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased;
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-soft;
+  }
+
+  .btn-base {
+    @apply inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply btn-base bg-brand-600 text-white hover:bg-brand-700;
+  }
+
+  .btn-secondary {
+    @apply btn-base border border-slate-300 bg-white text-slate-700 hover:bg-slate-100;
+  }
+
+  .btn-ghost {
+    @apply btn-base px-2 py-1 text-slate-600 hover:bg-slate-100;
+  }
+
+  .btn-danger {
+    @apply btn-base border border-red-200 bg-white px-2 py-1 text-red-600 hover:bg-red-50;
+  }
+
+  .input-base {
+    @apply rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1;
+  }
+
+  .select-base {
+    @apply input-base pr-8;
+  }
+}

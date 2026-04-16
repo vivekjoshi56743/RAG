@@ -20,13 +20,21 @@ export function UploadZone({ onUpload }: Props) {
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
       onClick={() => inputRef.current?.click()}
-      className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-colors
-        ${dragging ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"}`}
+      className={`cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition
+        ${dragging ? "border-brand-500 bg-brand-50" : "border-slate-300 bg-white hover:border-brand-300 hover:bg-slate-50"}`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
     >
-      <p className="text-sm text-gray-500">
-        Drop files here or <span className="text-blue-600 underline">browse</span>
+      <p className="text-sm text-slate-600">
+        Drop files here or <span className="font-medium text-brand-600 underline">browse</span>
       </p>
-      <p className="mt-1 text-xs text-gray-400">PDF, DOCX, TXT, Markdown</p>
+      <p className="mt-1 text-xs text-slate-400">PDF, DOCX, TXT, Markdown</p>
       <input
         ref={inputRef}
         type="file"

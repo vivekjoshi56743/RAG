@@ -112,6 +112,8 @@ export const createConversation = (token: string) =>
 export const listConversations = (token: string) => request<Conversation[]>("/api/conversations", { token });
 export const getConversation = (id: string, token: string) =>
   request<ConversationDetail>(`/api/conversations/${id}`, { token });
+export const renameConversation = (id: string, title: string, token: string) =>
+  request<Conversation>(`/api/conversations/${id}`, { method: "PATCH", token, body: { title } });
 export const deleteConversation = (id: string, token: string) =>
   request<{ deleted: boolean }>(`/api/conversations/${id}`, { method: "DELETE", token });
 export const shareConversation = (id: string, token: string) =>

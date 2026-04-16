@@ -205,7 +205,7 @@ async def send_message(
     history = [dict(m) for m in history_rows]
 
     selected_docs = body.document_ids if body.document_ids else None
-    final_chunks, prompt_messages = await run_rag_pipeline(
+    final_chunks, prompt_messages, is_enumeration = await run_rag_pipeline(
         user_id=user_row["id"],
         query=body.content,
         conversation_history=history,
@@ -227,7 +227,7 @@ async def send_message(
     async def event_stream():
         full_answer = ""
         try:
-            async for token in stream_response(prompt_messages):
+            async for token in stream_response(prompt_messages, is_enumeration=is_enumeration):
                 full_answer += token
                 payload = {"type": "token", "text": token}
                 yield f"data: {json.dumps(payload)}\n\n"
@@ -242,7 +242,7 @@ async def send_message(
             # new title in the 'done' event and doesn't need to refetch.
             if is_first_exchange:
                 new_title = await maybe_autotitle_conversation(
-                    conv_id, first_user_msg, full_answer
+                    conv_id, user_row["id"], first_user_msg, full_answer
                 )
                 if new_title:
                     done_payload["title"] = new_title

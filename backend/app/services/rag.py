@@ -33,6 +33,13 @@ Citations:
 - A single sentence may cite multiple sources, e.g. "[Source 2][Source 5]".
 - If the answer is genuinely not in the sources, say so clearly and stop — do not guess."""
 
+ENUMERATION_SUFFIX = """
+
+IMPORTANT — this question asks you to enumerate ALL items of a type (all characters, all themes, all events, etc.).
+- Go through EVERY source block provided and extract every relevant item you find.
+- Present them as a structured list; do not stop after the first few.
+- After your list, add a brief note: "Note: This list is based on the document sections retrieved. If characters or items appear in other parts of the document, they may not be shown here." """
+
 
 async def run_rag_pipeline(
     user_id: UUID,
@@ -41,10 +48,10 @@ async def run_rag_pipeline(
     db,
     document_ids: list[UUID] | None = None,
     folder_id: UUID | None = None,
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict], list[dict], bool]:
     """
-    Returns (chunks, assembled_prompt) for streaming to the LLM.
-    Call stream_response() separately to get the SSE stream.
+    Returns (chunks, prompt_messages, is_enumeration).
+    Call stream_response(prompt_messages, is_enumeration) separately to get the SSE stream.
     """
     # Stage 1
     query_data = await process_query(query, conversation_history)
@@ -59,23 +66,30 @@ async def run_rag_pipeline(
         folder_id=folder_id,
     )
 
+    is_enumeration = query_data.get("is_enumeration", False)
+
     # Stage 3 — use LLM reranker for comparison queries (multiple sub-queries)
     use_llm = len(query_data["sub_queries"]) > 1
-    reranked = await rerank(query_data["rewritten"], candidates, top_n=25, use_llm=use_llm)
+    # Enumeration queries need a wider candidate set because the answers are
+    # spread across many disparate chunks (e.g. every character in a novel).
+    stage3_top_n = 60 if is_enumeration else 25
+    reranked = await rerank(query_data["rewritten"], candidates, top_n=stage3_top_n, use_llm=use_llm)
 
-    # Stage 4
+    # Stage 4 — for enumeration queries pass a broader set; otherwise keep default.
+    stage4_top_n = 35 if is_enumeration else 12
     final_chunks = await apply_user_signals(
         user_id=user_id,
         query_embedding=query_data["embedding"],
         chunks=reranked,
         db=db,
-        top_n=12,
+        top_n=stage4_top_n,
     )
 
     # Context assembly
-    prompt = _build_prompt(query_data["rewritten"], final_chunks, conversation_history)
+    prompt = _build_prompt(query_data["rewritten"], final_chunks, conversation_history,
+                           is_enumeration=is_enumeration)
 
-    return final_chunks, prompt
+    return final_chunks, prompt, is_enumeration
 
 
 def _format_source_header(index: int, chunk: dict) -> str:
@@ -96,13 +110,22 @@ def _format_source_header(index: int, chunk: dict) -> str:
     return "[" + " — ".join(parts) + "]"
 
 
-def _build_prompt(query: str, chunks: list[dict], history: list[dict]) -> list[dict]:
+def _build_prompt(query: str, chunks: list[dict], history: list[dict],
+                   is_enumeration: bool = False) -> list[dict]:
     """Build the messages array for the chat LLM."""
     source_blocks = []
     for i, c in enumerate(chunks):
         header = _format_source_header(i + 1, c)
         source_blocks.append(f"{header}\n{c['content']}")
     sources = "\n\n".join(source_blocks)
+
+    question_text = query
+    if is_enumeration:
+        question_text = (
+            f"{query}\n\n"
+            "(Please list ALL items you can find across every source block above. "
+            "Do not stop after a few — go through all sources and be exhaustive.)"
+        )
 
     messages = []
 
@@ -111,18 +134,21 @@ def _build_prompt(query: str, chunks: list[dict], history: list[dict]) -> list[d
 
     messages.append({
         "role": "user",
-        "content": f"Sources:\n{sources}\n\nQuestion: {query}",
+        "content": f"Sources:\n{sources}\n\nQuestion: {question_text}",
     })
 
     return messages
 
 
-async def stream_response(prompt_messages: list[dict]):
+async def stream_response(prompt_messages: list[dict], is_enumeration: bool = False):
     """Yield SSE text chunks from provider-routed chat model (with fallback)."""
+    system = SYSTEM_PROMPT + (ENUMERATION_SUFFIX if is_enumeration else "")
+    # Enumeration answers can be very long (listing 20+ characters with descriptions).
+    max_tok = 6000 if is_enumeration else 4096
     async for text in stream_chat(
         prompt_messages,
-        system=SYSTEM_PROMPT,
-        max_tokens=4096,
+        system=system,
+        max_tokens=max_tok,
         temperature=0.0,
     ):
         yield text
