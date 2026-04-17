@@ -84,3 +84,8 @@ pnpm-debug.log*
 out/
 .nuxt/
 .vite/
+.env
+.env.local
+.env.example
+frontend/.env.local
+backend/.env

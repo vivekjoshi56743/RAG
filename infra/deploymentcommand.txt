@@ -11,7 +11,7 @@ gcloud run deploy rag-backend \
   --set-env-vars "VERTEX_LOCATION=us-central1" \
   --set-env-vars "DATABASE_URL=postgresql+asyncpg://app_user:Appuser123%40@/rag_production?host=/cloudsql/bpf-ai-dev-env:us-central1:rag-sql" \
   --set-env-vars "LLM_PRIMARY_PROVIDER=vertex" \
-  --set-env-vars "VERTEX_RANKING_CONFIG=
+  --set-env-vars "VERTEX_RANKING_CONFIG=projects/bpf-ai-dev-env/locations/global/rankingConfigs/default_ranking_config" \
   --set-env-vars "VERTEX_CHAT_MODEL=gemini-2.5-pro" \
   --set-env-vars "VERTEX_SUMMARY_MODEL=gemini-2.5-pro" \
   --set-env-vars "VERTEX_REWRITE_MODEL=gemini-2.5-pro" \

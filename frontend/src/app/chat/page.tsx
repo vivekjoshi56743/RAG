@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { Copy, Plus, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Plus, Share2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -39,6 +39,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -321,8 +322,9 @@ export default function ChatPage() {
         </div>
       }
     >
-      <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
-        <aside className="surface-card flex h-full flex-col overflow-y-auto p-3">
+      <div className={`grid h-full gap-4 transition-all duration-300 ${sidebarOpen ? "lg:grid-cols-[300px_1fr]" : "lg:grid-cols-[0px_1fr]"}`}>
+        <aside className={`surface-card flex h-full flex-col overflow-hidden p-0 transition-all duration-300 ${sidebarOpen ? "w-[300px] opacity-100" : "w-0 opacity-0 pointer-events-none"}`}>
+          <div className="flex h-full flex-col overflow-y-auto p-3">
           <div className="mb-3 space-y-2">
             <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Conversations</h2>
             <input
@@ -413,9 +415,18 @@ export default function ChatPage() {
               </div>
             )}
           </div>
+          </div>
         </aside>
 
-        <section className="surface-card flex h-full flex-col overflow-hidden p-0">
+        <section className="surface-card relative flex h-full flex-col overflow-hidden p-0">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((o) => !o)}
+            className="absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {sidebarOpen ? <ChevronLeft className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+          </button>
           <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50 p-4">
             <div className="space-y-3 mx-auto max-w-4xl">
               {messages.map((message) => (

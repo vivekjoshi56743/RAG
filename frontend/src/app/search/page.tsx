@@ -29,7 +29,7 @@ export default function SearchPage() {
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [tags, setTags] = useState("");
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(5);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
   const [viewerText, setViewerText] = useState("");
@@ -167,7 +167,7 @@ export default function SearchPage() {
           {selectedResult ? (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">
+                <span className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">
                   {selectedResult.doc_name}
                 </span>
                 {(selectedResult.page ?? selectedResult.page_number) ? (
@@ -176,7 +176,7 @@ export default function SearchPage() {
                   </span>
                 ) : null}
               </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 font-sans text-sm">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 font-sans text-sm dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100">
                 <MarkdownViewer content={viewerText || "No text content available for this chunk."} />
               </div>
             </div>

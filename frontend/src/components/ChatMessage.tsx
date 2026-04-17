@@ -21,9 +21,15 @@ export function ChatMessage({ message, onCitationClick }: Props) {
       >
         {isUser ? (
           <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+        ) : message.content === "" ? (
+          <span className="flex items-center gap-1 py-1">
+            <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce [animation-delay:-0.3s]" />
+            <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce [animation-delay:-0.15s]" />
+            <span className="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" />
+          </span>
         ) : (
-          <MarkdownViewer 
-            content={message.content} 
+          <MarkdownViewer
+            content={message.content}
             citations={message.citations}
             onCitationClick={onCitationClick}
           />

@@ -7,7 +7,6 @@ interface Props {
 
 export function SearchResultItem({ result, onClick }: Props) {
   const page = result.page ?? result.page_number;
-  const score = result.score ?? result.final_score ?? 0;
   const snippet = result.snippet ?? result.content ?? "";
   return (
     <button
@@ -23,9 +22,7 @@ export function SearchResultItem({ result, onClick }: Props) {
               P.{page}
             </span>
           )}
-          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">
-            Score {score.toFixed(2)}
-          </span>
+
         </div>
       </div>
       <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400 transition-colors group-hover:text-slate-900 dark:group-hover:text-slate-200">{snippet}</p>

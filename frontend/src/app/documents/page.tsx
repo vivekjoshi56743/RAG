@@ -341,25 +341,29 @@ function DocumentsPageContent() {
             {permissionsDoc ? (
               <>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Managing: {permissionsDoc.name}</p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 space-y-2">
                   <input
                     value={shareEmail}
                     onChange={(e) => setShareEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="input-base flex-1"
+                    type="email"
+                    autoComplete="off"
+                    className="input-base w-full"
                   />
-                  <select
-                    value={shareRole}
-                    onChange={(e) => setShareRole(e.target.value as Exclude<AccessRole, "owner">)}
-                    className="select-base"
-                  >
-                    <option value="viewer">viewer</option>
-                    <option value="editor">editor</option>
-                    <option value="admin">admin</option>
-                  </select>
-                  <button onClick={onShareDocument} className="btn-primary" type="button">
-                    Share
-                  </button>
+                  <div className="flex gap-2">
+                    <select
+                      value={shareRole}
+                      onChange={(e) => setShareRole(e.target.value as Exclude<AccessRole, "owner">)}
+                      className="select-base flex-1"
+                    >
+                      <option value="viewer">viewer</option>
+                      <option value="editor">editor</option>
+                      <option value="admin">admin</option>
+                    </select>
+                    <button onClick={onShareDocument} className="btn-primary" type="button">
+                      Share
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 space-y-2">
                   {permissions.map((perm) => (
