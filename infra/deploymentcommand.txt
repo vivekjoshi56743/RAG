@@ -1,0 +1,44 @@
+gcloud run deploy rag-backend \
+  --image us-central1-docker.pkg.dev/bpf-ai-dev-env/rag-backend/rag-backend:latest \
+  --region us-central1 \
+  --platform managed \
+  --service-account rag-backend-sa@bpf-ai-dev-env.iam.gserviceaccount.com \
+  --add-cloudsql-instances bpf-ai-dev-env:us-central1:rag-sql \
+  --set-env-vars "FIREBASE_PROJECT_ID=bpf-ai-dev-env" \
+  --set-env-vars "GCS_BUCKET=bpf-ai-dev-env-uploads" \
+  --set-env-vars "DEV_AUTH_ENABLED=false" \
+  --set-env-vars "VERTEX_PROJECT_ID=bpf-ai-dev-env" \
+  --set-env-vars "VERTEX_LOCATION=us-central1" \
+  --set-env-vars "DATABASE_URL=postgresql+asyncpg://app_user:Appuser123%40@/rag_production?host=/cloudsql/bpf-ai-dev-env:us-central1:rag-sql" \
+  --set-env-vars "LLM_PRIMARY_PROVIDER=vertex" \
+  --set-env-vars "VERTEX_RANKING_CONFIG=
+  --set-env-vars "VERTEX_CHAT_MODEL=gemini-2.5-pro" \
+  --set-env-vars "VERTEX_SUMMARY_MODEL=gemini-2.5-pro" \
+  --set-env-vars "VERTEX_REWRITE_MODEL=gemini-2.5-pro" \
+  --set-env-vars "VERTEX_ENRICH_MODEL=gemini-2.5-pro" \
+  --set-env-vars "VERTEX_RERANK_MODEL=gemini-2.5-pro" \
+  --set-env-vars "VERTEX_EMBEDDING_MODEL=gemini-embedding-001" \
+  --set-env-vars "VERTEX_RANKING_MODEL=semantic-ranker-512@latest" \
+  --set-env-vars "EMBEDDING_DIMENSIONS=768" \
+  --set-env-vars "EMBEDDING_MODEL_PROFILE=quality" \
+  --allow-unauthenticated \
+  --port 8080 \
+  --project=bpf-ai-dev-env
+
+
+
+{'name': 'GCS_BUCKET', 'value': 'rag-bucket-001-test'};{'name': 'FIREBASE_PROJECT_ID', 'value': 'ragchatbot-493213'};
+{'name': 'VERTEX_PROJECT_ID', 'value': 'ragchatbot-493213'};
+{'name': 'VERTEX_LOCATION', 'value': 'us-central1'};{'name': 'LLM_PRIMARY_PROVIDER', 'value': 'vertex'};
+{'name': 'LLM_FALLBACK_PROVIDER', 'value': 'anthropic'};
+{'name': 'VERTEX_RANKING_CONFIG', 'value': 'projects/ragchatbot-493213/locations/global/rankingConfigs/default_ranking_config'};
+{'name': 'DATABASE_URL', 'value': 'postgresql+asyncpg://app_user:Appuser123%40@/rag_production?host=/cloudsql/ragchatbot-493213:us-central1:rag-sql'};
+{'name': 'VERTEX_CHAT_MODEL', 'value': 'gemini-2.5-pro'};{'name': 'VERTEX_SUMMARY_MODEL', 'value': 'gemini-2.5-pro'};
+{'name': 'VERTEX_REWRITE_MODEL', 'value': 'gemini-2.5-pro'};{'name': 'VERTEX_ENRICH_MODEL', 'value': 'gemini-2.5-pro'};
+{'name': 'VERTEX_RERANK_MODEL', 'value': 'gemini-2.5-pro'};{'name': 'VERTEX_EMBEDDING_MODEL', 'value': 'gemini-embedding-001'};
+{'name': 'VERTEX_RANKING_MODEL', 'value': 'semantic-ranker-512@latest'};{'name': 'EMBEDDING_DIMENSIONS', 'value': '768'};
+{'name': 'EMBEDDING_MODEL_PROFILE', 'value': 'quality'};
+{'name': 'ANTHROPIC_API_KEY', 'valueFrom': {'secretKeyRef': {'key': 'latest', 'name': 'anthropic-api-key'}}}
+vivekjoshi@Viveks-MacBook-Air ~ % gcloud config set account vivekjoshi@bipolarfactory.com
+gcloud config set project bpf-ai-dev-env   
+Updated property [core/account].

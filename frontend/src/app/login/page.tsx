@@ -29,10 +29,10 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950 p-6 transition-colors duration-300">
       <section className="surface-card w-full max-w-md p-7">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Sign in to RAG Engine</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Sign in to RAG Engine</h1>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           Use your Google account to access documents, search, and chat.
         </p>
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
           {submitting ? "Signing in..." : "Continue with Google"}
         </button>
 
-        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       </section>
     </main>
   );
